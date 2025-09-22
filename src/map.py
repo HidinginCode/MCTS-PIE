@@ -29,3 +29,19 @@ class Map():
 
         self.map_dim = map_dim
         self.map = [[random.random() for _ in range(map_dim)] for _ in range(map_dim)]
+
+    def get_map(self) -> list:
+        """ Returns the map list.
+
+        Returns:
+            list: 2 dimensional map list.
+        """
+        return self.map
+
+    def get_map_dim(self) -> int:
+        """ Returns the map dimensions.
+
+        Returns:
+            int: Map dimension
+        """
+        return self.map_dim
