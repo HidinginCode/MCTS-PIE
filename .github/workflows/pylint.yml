@@ -21,7 +21,8 @@ jobs:
           python -m pip install --upgrade pip
           pip install pylint
 
-      - name: Analysing the code with pylint (C0303, C0301 disabled)
+      - name: Analysing the code with pylint (C0303, C0301, R0903 disabled)
         run: |
           pylint --disable=C0303 $(git ls-files '*.py')
           pylint --disable=C0301 $(git ls-files '*.py')
+          pylint --disable=R0903 $(git ls-files '*.py')
