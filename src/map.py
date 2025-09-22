@@ -1,3 +1,10 @@
+"""Map module.
+
+This module defines the `Map` class, which represents a 2D grid of obstacles
+with values between 0 and 1 (density). The map is initialized with random
+values in this range.
+"""
+
 import random
 
 class Map():
