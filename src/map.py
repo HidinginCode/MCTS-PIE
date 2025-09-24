@@ -19,6 +19,7 @@ class Map():
     # Global Arguments for Map Class
     map = []
     map_dim = 0
+    identificator = None
 
     def __init__(self, map_dim: int = 10) -> None:
         """Init function for the map class.
@@ -29,6 +30,7 @@ class Map():
 
         self.map_dim = map_dim
         self.map = [[random.random() for _ in range(map_dim)] for _ in range(map_dim)]
+        self.identificator = id(self)
 
     def get_map(self) -> list:
         """ Returns the map list.
@@ -45,3 +47,11 @@ class Map():
             int: Map dimension
         """
         return self.map_dim
+
+    def get_identificator(self) -> int:
+        """Returns map identificator.
+
+        Returns:
+            int: Map identificator
+        """
+        return self.identificator
