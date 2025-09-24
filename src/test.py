@@ -5,6 +5,7 @@ This module contains all the tests needed for this project.
 
 from map import Map
 from agent import Agent
+from controller import Controller
 
 def map_creation_test():
     """Tests if map creation works as intended.
@@ -19,6 +20,10 @@ def map_creation_test():
         assert len(row) == 5, (
             f"Map dimension 2 row {row} has length {len(row)}, but should have 5"
             )
+
+    assert isinstance(test_map.get_identificator(), int), (
+        "Maps get_identificator method did not return int."
+    )
 
     print("Map creation test passed.")
 
@@ -51,11 +56,54 @@ def agent_creation_test():
 
     print("Agent creation test passed.")
 
+def controller_creation_test():
+    """Method that tests the creation of the controller.
+    """
+    test_map = Map(map_dim=5)
+    test_agent = Agent()
+    test_controller = Controller(map_copy=test_map, current_agent=test_agent)
+
+    assert isinstance(test_controller.get_map_copy(), Map), (
+        "Controllers get_map_copy methdo did not return Map object."
+    )
+
+    assert isinstance(test_controller.get_current_agent(), Agent), (
+        "Controllers get_current_agent method did not return Agent object."
+    )
+
+    assert isinstance(test_controller.get_identificator(), int), (
+        "Controllers get_identificator method did not return int."
+    )
+
+    test_map2 = Map(map_dim=10)
+    test_controller.set_map_copy(map_copy=test_map2)
+
+    old_map_id = test_map.get_identificator()
+    new_map_id = test_controller.get_map_copy().get_identificator()
+
+    assert new_map_id != old_map_id, (
+        "Newly set map should have a different identificator than the old map."
+    )
+
+
+    test_agent2 = Agent()
+    test_controller.set_current_agent(current_agent=test_agent2)
+
+    old_agent_id = test_agent.get_idenificator()
+    new_agent_id = test_controller.get_current_agent().get_idenificator()
+
+    assert old_agent_id != new_agent_id, (
+        "Newly set agent should have a different identificator than the old agent."
+    )
+
+    print("Controller creation test passed.")
+
 def main():
     """Main function that runs all the defined test methods.
     """
     map_creation_test()
     agent_creation_test()
+    controller_creation_test()
 
 if __name__ == "__main__":
     main()
