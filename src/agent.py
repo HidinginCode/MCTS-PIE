@@ -69,7 +69,6 @@ class Agent():
         Returns:
             list: Agent path.
         """
-
         return self.path
 
     def set_path(self, path: list) -> None:
@@ -78,5 +77,4 @@ class Agent():
         Args:
             path (list): New path for agent
         """
-
         self.path = deepcopy(path)
