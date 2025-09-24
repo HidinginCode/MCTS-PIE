@@ -18,3 +18,9 @@ The agent class is used to simulate the agent in the environment and collect met
 Each agent has an identifier attribute that is its `ID` on creation.  
 Metrics collected are `step_count`, `amount_of_shifts` and `energy_consumption`.  
 The agent also holds the `path` that it takes to traverse the map.
+
+### Controller
+The controller class simulates the agent on the map.  
+It is responsible for the agents movements and the shifts on the map.  
+On creation it deepcopys the given map and saves it as `map_copy`.  
+The agent is saved under the variable `current_agent`.
