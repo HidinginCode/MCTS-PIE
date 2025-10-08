@@ -112,3 +112,33 @@ class Controller():
                 return False
 
         return True
+
+    def combine_obstacles(self, obstacle_pos: tuple, destination: tuple) -> None:
+        """Combines the densities of 2 obstacles at specified positions.
+
+        Args:
+            obstacle_pos (tuple): Position of the obstacle that has to be shifted (x,y).
+            destination (tuple): Position of destination obtacle (x,y).
+        """
+
+        obstacle_density = self.map_copy.get_obstacle_density(pos = obstacle_pos)
+        self.map_copy.change_obstacle_density(pos = destination, density = obstacle_density)
+        self.map_copy.eliminate_obstacle(pos = obstacle_pos)
+
+
+    def move_agent(self, new_pos: tuple) -> bool:
+        """Moves the agent and facilitates map changes.
+
+        Args:
+            new_pos (tuple): Position to move the agent to (x,y).
+
+        Returns:
+            bool: Check if move was sucessfull.
+        """
+
+        # Check if new position is valid
+        if not self.is_valid_position(new_pos):
+            print(f"Tried to move the agent to an invalid position ({new_pos}).")
+            return False
+
+        return True

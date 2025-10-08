@@ -25,6 +25,21 @@ def map_creation_test():
         "Maps get_identificator method did not return int."
     )
 
+    test_map.set_obstacle_denstity((0,0), 1)
+    assert test_map.get_obstacle_density(pos=(0,0)) == 1, (
+        "Denstiy at (0,0) should have been 1 after maps set_obstacle_density method.."
+    )
+
+    test_map.eliminate_obstacle(pos = (0,0))
+    assert test_map.get_obstacle_density(pos=(0,0)) == 0, (
+        "Denstiy at (0,0) should have been 0 after maps eliminate_obstacle method."
+    )
+
+    test_map.change_obstacle_density((0,0), 2)
+    assert test_map.get_obstacle_density((0,0)) == 2, (
+        "Density at (0,0) should have been 2 after maps change_obstacle_density method."
+    )
+
     print("Map creation test passed.")
 
 def agent_creation_test():
@@ -116,12 +131,28 @@ def controller_creation_test():
 
     print("Controller creation test passed.")
 
+def combine_obstacles_test():
+    """Tests the combine obstacles method.
+    """
+
+    test_map = Map(3)
+    test_agent = Agent()
+    test_controller = Controller(map_copy=test_map, current_agent= test_agent, start_pos=(0,0))
+
+    print(test_controller.map_copy.map)
+
+    test_controller.combine_obstacles((0,0), (1,0))
+
+    print(test_controller.map_copy.map)
+
+
 def main():
     """Main function that runs all the defined test methods.
     """
     map_creation_test()
     agent_creation_test()
     controller_creation_test()
+    #combine_obstacles_test()
 
 if __name__ == "__main__":
     main()

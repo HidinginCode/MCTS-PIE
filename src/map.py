@@ -57,3 +57,50 @@ class Map():
             int: Map identificator
         """
         return self.identificator
+
+    def get_obstacle_density(self, pos: tuple) -> float:
+        """Get the density of the specified obstacle
+
+        Args:
+            pos (tuple): Position of the obstacle (x,y).
+
+        Returns:
+            float: Density of the obstacle.
+        """
+
+        x,y = pos
+        return self.map[x][y]
+
+    def set_obstacle_denstity(self, pos: tuple, density: float) -> None:
+        """Sets the obstacle density to a specified ammount.
+
+        Args:
+            pos (tuple): Position of the obstacle.
+            density (float): Density value to be set.
+        """
+
+        x,y = pos
+        self.map[x][y] = density
+
+    def change_obstacle_density(self, pos: tuple, density: float) -> None:
+        """Changes the density of an obstacle by a given amount.
+
+        Args:
+            pos (tuple): Obstacle position (x,y)
+            density (float): Density to be added/subtracted.
+        """
+
+        density_sum = self.get_obstacle_density(pos=pos) + density
+
+        density_sum = max(density_sum, 0)
+
+        self.set_obstacle_denstity(pos=pos, density=density_sum)
+
+    def eliminate_obstacle(self, pos: tuple) -> None:
+        """Sets the density of an obstacle to 0.
+
+        Args:
+            pos (tuple): Position of the obstacle that will be eliminated (x,y).
+        """
+
+        self.set_obstacle_denstity(pos=pos, density=0)
