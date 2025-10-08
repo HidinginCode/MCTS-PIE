@@ -25,4 +25,5 @@ The agent also holds the `path` that it takes to traverse the map.
 The controller class simulates the agent on the map.  
 It is responsible for the agents movements and the shifts on the map.  
 On creation it deepcopys the given map and saves it as `map_copy`.  
-The agent is saved under the variable `current_agent`.
+The agent is saved under the variable `current_agent`.  
+The agents current position is stored in the variable `current_agent_position`.  
