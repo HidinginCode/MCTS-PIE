@@ -39,6 +39,19 @@ class Agent():
         """
         return self.step_count
 
+    def set_step_count(self, count:int) -> None:
+        """Sets the step count of the agent to a specified amount.
+
+        Args:
+            count (int): Stepcount to be set.
+        """
+        self.step_count = count
+
+    def increase_step_count(self) -> None:
+        """Adds a step to the current step counter.
+        """
+        self.step_count += 1
+
     def get_amount_of_shifts(self) -> int:
         """Returns amount of shifts and agent performed.
 
@@ -54,6 +67,14 @@ class Agent():
             float: Amount of energy used by the agent.
         """
         return self.energy_consumption
+
+    def set_energy_consumption(self, energy_amount: float) -> None:
+        """Set the energy consumption to a specified amount.
+
+        Args:
+            energy_amount (float): Energy amount to be set.
+        """
+        self.energy_consumption = energy_amount
 
     def get_idenificator(self) -> int:
         """Returns identificator of the agent.
