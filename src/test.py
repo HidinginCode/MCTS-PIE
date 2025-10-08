@@ -106,11 +106,11 @@ def controller_creation_test():
         "Controllers set_current_agent_position method did not set position correctly."
     )
 
-    assert test_controller.is_valid_position((0,0)) == True, (
+    assert test_controller.is_valid_position((0,0)), (
         "Controllers is_valid_position method did not identify (0,0) as a valid position."
     )
 
-    assert test_controller.is_valid_position((-1,-1)) == False, (
+    assert not test_controller.is_valid_position((-1,-1)), (
         "Controllers is_valid_position method did not identify (-1,-1) as an invalid position."
     )
 
