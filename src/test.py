@@ -61,7 +61,7 @@ def controller_creation_test():
     """
     test_map = Map(map_dim=5)
     test_agent = Agent()
-    test_controller = Controller(map_copy=test_map, current_agent=test_agent)
+    test_controller = Controller(map_copy=test_map, current_agent=test_agent, start_pos=(0,0))
 
     assert isinstance(test_controller.get_map_copy(), Map), (
         "Controllers get_map_copy methdo did not return Map object."
@@ -94,6 +94,24 @@ def controller_creation_test():
 
     assert old_agent_id != new_agent_id, (
         "Newly set agent should have a different identificator than the old agent."
+    )
+
+    assert test_controller.get_current_agent_position() == (0,0), (
+        "Start position for the agent was set wrong on creation of the controller."
+    )
+
+    test_controller.set_current_agent_position((1,1))
+
+    assert test_controller.get_current_agent_position() == (1,1), (
+        "Controllers set_current_agent_position method did not set position correctly."
+    )
+
+    assert test_controller.is_valid_position((0,0)) == True, (
+        "Controllers is_valid_position method did not identify (0,0) as a valid position."
+    )
+
+    assert test_controller.is_valid_position((-1,-1)) == False, (
+        "Controllers is_valid_position method did not identify (-1,-1) as an invalid position."
     )
 
     print("Controller creation test passed.")
