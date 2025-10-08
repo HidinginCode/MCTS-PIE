@@ -1,8 +1,9 @@
 """Map module.
 
 This module defines the `Map` class, which represents a 2D grid of obstacles
-with values between 0 and 1 (density). The map is initialized with random
-values in this range.
+with values between 0 and 1 (density) on creation. The map is initialized with random
+values in this range. Obstacles can later be combined to a weight bigger than 1,
+but take more energy to move again after that.
 """
 
 import random
@@ -11,9 +12,10 @@ class Map():
     """This class holds the map object.
     A map consists of a two dimensional list, that holds obstacles of a certain density.
 
-    The density is always between '0' and '1'.
+    The density is always between '0' and '1' on map creation.
 
-    Obstacles can be combined, but only if they stay in the specified density interval.
+    Obstacles can be combined,which adds up their density value but increases energy cost
+    if the obstacle is to be moved again.
     """
 
     # Global Arguments for Map Class

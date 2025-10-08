@@ -11,7 +11,9 @@ This project contains a path influenced ennvironment problem, and a monte carlo 
 The map class is the basic construct of the problem. 
 Each map has an identifier `ID` that is set on creation.   
 It is always a square map that has its dimension set on creation.  
-It is modeled using 2 dimensional lists, for reasons of comuting speed and contains random values between `0` and `1` in each cell.
+It is modeled using 2 dimensional lists, for reasons of comuting speed and contains random values between `0` and `1` in each cell.  
+Cells can be merged together which adds up their densities (values in the cells).  
+The newly created obstacle then takes more energy to move again.
 
 ### Agent
 The agent class is used to simulate the agent in the environment and collect metrics.  
