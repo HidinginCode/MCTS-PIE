@@ -18,7 +18,7 @@ The newly created obstacle then takes more energy to move again.
 ### Agent
 The agent class is used to simulate the agent in the environment and collect metrics.  
 Each agent has an identifier attribute that is its `ID` on creation.  
-Metrics collected are `step_count`, `amount_of_shifts` and `energy_consumption`.  
+Metrics collected are `step_count`, `amount_of_shifts`, `energy_consumption`, `weight_shifted`.  
 The agent also holds the `path` that it takes to traverse the map.
 
 ### Controller
