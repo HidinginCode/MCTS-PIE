@@ -11,12 +11,6 @@ class Controller():
     and updates map accordingly.
     """
 
-    # Controller Variables
-    map_copy = None
-    current_agent = None
-    current_agent_position = None
-    identifcator = None
-
     def __init__(self, map_copy: Map, current_agent: Agent, start_pos: tuple):
         """Init method for the controller class.
 
@@ -27,7 +21,7 @@ class Controller():
         self.map_copy = deepcopy(map_copy)
         self.current_agent = current_agent
         self.identifcator = id(self)
-        self.current_agent_position = start_pos
+        self.current_agent_position = list(start_pos)
 
     def __str__(self) -> str:
         """String method for the controller.
@@ -81,7 +75,7 @@ class Controller():
         """
         return self.identifcator
 
-    def get_current_agent_position(self) -> tuple:
+    def get_current_agent_position(self) -> list:
         """Returns current position of the agent.
 
         Returns:
@@ -126,11 +120,12 @@ class Controller():
         self.map_copy.eliminate_obstacle(pos = obstacle_pos)
 
 
-    def move_agent(self, new_pos: tuple) -> bool:
+    def move_agent(self, new_pos: tuple, shifting_direction: list) -> bool:
         """Moves the agent and facilitates map changes.
 
         Args:
             new_pos (tuple): Position to move the agent to (x,y).
+            shifting_direction (tuple): Direction the obstacle is shifted towards.
 
         Returns:
             bool: Check if move was sucessfull.
@@ -141,4 +136,20 @@ class Controller():
             print(f"Tried to move the agent to an invalid position ({new_pos}).")
             return False
 
+        self.set_current_agent_position(new_pos=new_pos)
+        self.current_agent.increase_step_count()
+
+        # Check for obstacle on new_pos
+        # If there is one we need to do the shifting action
+        if self.map_copy.get_obstacle_density(new_pos) > 0:
+            new_obstacle_pos = tuple(sum(coord) for coord in zip(new_pos, shifting_direction))
+
+            assert self.is_valid_position(new_obstacle_pos), (
+                f"Tried to do a shift outside of the map boundaries: {new_obstacle_pos}."
+            )
+
+            obstacle_density_on_pos = self.map_copy.get_obstacle_density(new_pos)
+            self.current_agent.increase_energy_consumption(obstacle_density_on_pos)
+            self.combine_obstacles(new_pos, new_obstacle_pos)
+            self.current_agent.increase_amount_of_shifts()
         return True
