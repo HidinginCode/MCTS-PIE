@@ -5,6 +5,7 @@ perform the shifts and update the map accordingly."""
 from copy import deepcopy
 from map import Map
 from agent import Agent
+from directions import Direction
 
 class Controller():
     """Controller class, that simulates agent on the map
@@ -120,16 +121,23 @@ class Controller():
         self.map_copy.eliminate_obstacle(pos = obstacle_pos)
 
 
-    def move_agent(self, new_pos: tuple, shifting_direction: list) -> bool:
+    def move_agent(self, move_direction: Direction, shifting_direction: Direction) -> bool:
         """Moves the agent and facilitates map changes.
 
         Args:
-            new_pos (tuple): Position to move the agent to (x,y).
-            shifting_direction (tuple): Direction the obstacle is shifted towards.
+            new_pos (Direction): Position to move the agent to (x,y).
+            shifting_direction (Direction): Direction the obstacle is shifted towards.
 
         Returns:
             bool: Check if move was sucessfull.
         """
+
+        new_pos = tuple(
+            sum(coord) for coord in zip(
+                self.current_agent_position,
+                move_direction.value
+            )
+        )
 
         # Check if new position is valid
         if not self.is_valid_position(new_pos):
@@ -142,7 +150,7 @@ class Controller():
         # Check for obstacle on new_pos
         # If there is one we need to do the shifting action
         if self.map_copy.get_obstacle_density(new_pos) > 0:
-            new_obstacle_pos = tuple(sum(coord) for coord in zip(new_pos, shifting_direction))
+            new_obstacle_pos = tuple(sum(coord) for coord in zip(new_pos, shifting_direction.value))
 
             assert self.is_valid_position(new_obstacle_pos), (
                 f"Tried to do a shift outside of the map boundaries: {new_obstacle_pos}."
