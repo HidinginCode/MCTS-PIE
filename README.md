@@ -27,3 +27,7 @@ It is responsible for the agents movements and the shifts on the map.
 On creation it deepcopys the given map and saves it as `map_copy`.  
 The agent is saved under the variable `current_agent`.  
 The agents current position is stored in the variable `current_agent_position`.  
+
+### Directions
+The directions enum is used for simplicity.  
+It contains all 4 cardinal directions and their corresponding coordinates (`[1,0], [0,1], ...`).
