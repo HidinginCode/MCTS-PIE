@@ -32,6 +32,10 @@ The agents current position is stored in the variable `current_agent_position`.
 The directions enum is used for simplicity.  
 It contains all 4 cardinal directions and their corresponding coordinates (`[1,0], [0,1], ...`).
 
+### McTree
+This class represents the monte carlo tree that will be used.  
+It contains the `root` node, as well as the `maximum_depth` of the tree.
+
 ### Node
 The node class is used to build the mcts tree.  
 It containts the current `state`, the `parent` node and the `children` (children as a `dictionary`).
