@@ -31,3 +31,8 @@ The agents current position is stored in the variable `current_agent_position`.
 ### Directions
 The directions enum is used for simplicity.  
 It contains all 4 cardinal directions and their corresponding coordinates (`[1,0], [0,1], ...`).
+
+### State
+The state class contains the `state` of everything in a given node of the MCTS tree.  
+It holds all `agent metrics` and its `position` on the current map.  
+Later this will also contain an evaluation method that gives us the `fitness` of the state.
