@@ -1,6 +1,8 @@
 """This module represents a the node class for the MCTS tree."""
 
 from __future__ import annotations
+import math
+import random
 from copy import deepcopy
 from directions import Direction
 from state import State
@@ -17,14 +19,20 @@ class Node():
         """
 
         self.state = deepcopy(state)
-        self.parent = deepcopy(parent)
+        self.parent = parent
         self.children = {}
         self.identificator = id(self)
         self.visits = 0
-        self.value = 0.0
+        self.values = {
+            "energy_consumed": 0.0,
+            "step_count": 0,
+            "weight_shifted": 0.0,
+            "amount_of_shifts": 0
+        }
+        self.ucb_vector = {}
 
     def get_state(self) -> State:
-        """Retruns the state of the current node.
+        """Returns the state of the current node.
 
         Returns:
             State: State of the current node
@@ -47,7 +55,7 @@ class Node():
         Args:
             parent (Node | None): New parent for node
         """
-        self.parent = deepcopy(parent)
+        self.parent = parent
 
     def get_children(self) -> dict | None :
         """Returns children of the current Node.
@@ -65,7 +73,7 @@ class Node():
             children (dict): New children of current node
         """
 
-        self.children = deepcopy(children)
+        self.children = children
 
     def get_identificator(self) -> int:
         """Returns ID of current node.
@@ -86,48 +94,58 @@ class Node():
         return self.visits
 
     def set_visits(self, visits: int) -> None:
-        """Sets the number of node visits to a specific ammount.
+        """Sets the number of node visits to a specific amount.
 
         Args:
             visits (int): Number of times the node was visited.
         """
 
-        self.visits = deepcopy(visits)
+        self.visits = visits
 
     def increase_visits(self, amount: int) -> None:
-        """Increases the number of visits by a given ammount.
+        """Increases the number of visits by a given amount.
 
         Args:
-            amount (int): Ammount of visits
+            amount (int): Amount of visits
         """
 
         self.visits += amount
 
-    def get_value(self) -> float:
+    def get_values(self) -> dict:
         """Returns the value of the node.
 
         Returns:
             float: Value of the node.
         """
 
-        return self.value
+        return self.values
 
-    def set_value(self, value: float) -> None:
+    def set_value(self, values: dict) -> None:
         """Sets the value to a specified amount.
 
         Args:
             value (float): New value
         """
 
-        self.value = value
+        self.values = values
 
-    def change_value(self, amount: float) -> None:
-        """Changes the value by a given amount.
+    def get_ucb_vector(self) -> dict:
+        """Returns the ucb vector of the node.
+
+        Returns:
+            dict: Ucb vector
+        """
+
+        return self.ucb_vector
+
+    def set_ucb_vector(self, new_vector: dict) -> None:
+        """Sets a new ucb vector for a node.
 
         Args:
-            amount (float): Value change
+            new_vector (dict): New ucb vector
         """
-        self.value += amount
+
+        self.ucb_vector = new_vector
 
     def expand(self) -> None:
         """Expands the node, creating new children for all direction pairs 
@@ -157,3 +175,82 @@ class Node():
                     self.children[(movement_direction, shifting_direction)] = new_node
                 else:
                     self.children[(movement_direction, shifting_direction)] = None
+
+    def update_node(self, metrics: dict):
+        """Update means for each objective.
+
+        Args:
+            metrics (dict): Metrics used for the update
+        """
+        self.visits += 1
+        for key in self.values.keys():
+            # Calculate the mean for each objective
+            float_metric = float(metrics[key])
+            self.values[key]+= (float_metric - self.values[key]) / self.visits
+
+    def dominates(
+            self,
+            node_a_metrics: dict[str, float|int],
+            node_b_metrics: dict[str, float|int]
+        ) -> bool:
+        """Tests for dominance and returns true if vector a dominates vector b
+
+        Args:
+            node_a_metrics (dict[str, float | int]): Metrics of the first node
+            node_b_metrics (dict[str, float | int]): Metrics of the second node
+
+        Returns:
+            bool: Domination truth value
+        """
+
+        return all(node_a_metrics[key] <= node_b_metrics[key] for key in node_a_metrics) \
+        and any(node_a_metrics[key] < node_b_metrics[key] for key in node_a_metrics)
+
+    def select_child_pareto_ucb(self, c: float = 1.4) -> Node:
+        """Method for selecting a child from the ucb pareto front.
+
+        Args:
+            c (float, optional): C value. Defaults to 1.4.
+
+        Returns:
+            Node: Selected child
+        """
+        assert self.children, (
+            "No children to select from."
+        )
+        # Exclude invalid placeholder children
+        candidates = [ch for ch in self.children.values() if ch is not None]
+        log_parent = math.log(max(1, self.visits))
+
+        # Compute min/max metrics among children for normalization
+        metrics = list(self.values.keys())
+        stats = {
+            metric: (min(ch.values[metric] for ch in candidates),
+                    max(ch.values[metric] for ch in candidates))
+            for metric in metrics
+        }
+
+        # Compute per-objective UCB
+        for child in candidates:
+
+            # Safety check for children with no visits
+            if child.visits == 0:
+                child.set_ucb_vector({m: -float("inf") for m in metrics})
+                continue
+
+            child.set_ucb_vector({
+                metric: (
+                    (0.0 if stats[metric][1] == stats[metric][0]
+                    else (child.values[metric] - stats[metric][0]) /
+                    (stats[metric][1] - stats[metric][0]))
+                    - c * math.sqrt(log_parent / child.visits)
+                )
+            for metric in metrics
+            })
+
+        # Pareto front extraction
+        pareto = [
+            a for a in candidates
+            if not any(self.dominates(b.ucb_vector, a.ucb_vector) for b in candidates)]
+
+        return random.choice(pareto or candidates)
