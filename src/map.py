@@ -19,10 +19,6 @@ class Map():
     """
 
     # Global Arguments for Map Class
-    map = []
-    map_dim = 0
-    goal = ()
-    identificator = None
 
     def __init__(self, map_dim: int = 5, goal: tuple = (4,4)) -> None:
         """Init function for the map class.

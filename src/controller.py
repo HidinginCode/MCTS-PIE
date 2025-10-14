@@ -12,7 +12,7 @@ class Controller():
     and updates map accordingly.
     """
 
-    def __init__(self, map_copy: Map, current_agent: Agent, start_pos: tuple):
+    def __init__(self, map_copy: Map, current_agent: Agent, start_pos: tuple = (0,0)):
         """Init method for the controller class.
 
         Args:
@@ -20,13 +20,9 @@ class Controller():
             current_agent (Agent): Agent that is to be simulated.
         """
         self.map_copy = deepcopy(map_copy)
-        self.current_agent = current_agent
-        self.identifcator = id(self)
-        self.current_agent_position = list(start_pos)
-
-        # Eliminate obstacles at the start and at the goal position
-        self.map_copy.eliminate_obstacle(start_pos)
-        self.map_copy.eliminate_obstacle(self.map_copy.get_goal())
+        self.current_agent = deepcopy(current_agent)
+        self.identificator = id(self)
+        self.current_agent_position = start_pos
 
     def __str__(self) -> str:
         """String method for the controller.
@@ -35,7 +31,7 @@ class Controller():
             str: String that holds `identifier` and `agent identifier`
         """
         return (
-            f"Map identifier: {self.identifcator}\n"
+            f"Map identifier: {self.identificator}\n"
             f"Agent identifier: {self.current_agent.get_idenificator()}"
             f"Current agent position: {self.current_agent_position}"
         )
@@ -78,9 +74,9 @@ class Controller():
         Returns:
             int: Identifier
         """
-        return self.identifcator
+        return self.identificator
 
-    def get_current_agent_position(self) -> list:
+    def get_current_agent_position(self) -> tuple:
         """Returns current position of the agent.
 
         Returns:
@@ -139,33 +135,33 @@ class Controller():
         new_pos = tuple(
             sum(coord) for coord in zip(
                 self.current_agent_position,
-                move_direction.value
+                move_direction
             )
         )
 
         # Check if new position is valid
         if not self.is_valid_position(new_pos):
-            print(f"Tried to move the agent to an invalid position ({new_pos}).")
+            #print(f"Tried to move the agent to an invalid position ({new_pos}).")
             return False
-
-        self.set_current_agent_position(new_pos=new_pos)
-        self.current_agent.increase_step_count()
 
         # Check for obstacle on new_pos
         # If there is one we need to do the shifting action
         if self.map_copy.get_obstacle_density(new_pos) > 0:
-            new_obstacle_pos = tuple(sum(coord) for coord in zip(new_pos, shifting_direction.value))
+            new_obstacle_pos = tuple(sum(coord) for coord in zip(new_pos, shifting_direction))
 
-            assert self.is_valid_position(new_obstacle_pos), (
-                f"Tried to do a shift outside of the map boundaries: {new_obstacle_pos}."
-            )
+            if not self.is_valid_position(new_obstacle_pos):
+                #print(f"Tried to shift obstacle to invalid position {new_obstacle_pos}.")
+                return False
 
             obstacle_density_on_pos = self.map_copy.get_obstacle_density(new_pos)
             self.current_agent.increase_energy_consumption(obstacle_density_on_pos)
             self.combine_obstacles(new_pos, new_obstacle_pos)
             self.current_agent.increase_amount_of_shifts()
 
+        self.set_current_agent_position(new_pos=new_pos)
+        self.current_agent.increase_step_count()
+
         if new_pos == self.map_copy.get_goal():
-            self.current_agent.change_goal_collected()
+            self.current_agent.set_goal_collected(True)
 
         return True

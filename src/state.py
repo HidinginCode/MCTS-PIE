@@ -15,7 +15,7 @@ class State():
         """
 
         self.state_controller = deepcopy(state_controller)
-        self.state_agent = deepcopy(state_controller.get_current_agent())
+        self.state_agent = self.state_controller.get_current_agent()
         self.identificator = id(self)
 
     def get_state_agent(self) -> Agent:
@@ -60,3 +60,12 @@ class State():
         }
 
         return metric_dict
+
+    def get_terminal_state(self) -> bool:
+        """Returns if terminal state has been reached.
+
+        Returns:
+            bool: Terminal state value
+        """
+
+        return self.state_controller.get_current_agent().get_goal_collected()

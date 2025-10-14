@@ -31,6 +31,10 @@ class Node():
         }
         self.ucb_vector = {}
 
+    def __str__(self):
+        """String method for the node class."""
+        return f"Visits: {self.visits}\nValues: {self.values}"
+
     def get_state(self) -> State:
         """Returns the state of the current node.
 
@@ -219,15 +223,15 @@ class Node():
             "No children to select from."
         )
         # Exclude invalid placeholder children
-        candidates = [ch for ch in self.children.values() if ch is not None]
+        candidates = [child for child in self.children.values() if child is not None]
 
         log_parent = math.log(max(1, self.visits))
 
         # Compute min/max metrics among children for normalization
         metrics = list(self.values.keys())
         stats = {
-            metric: (min(ch.values[metric] for ch in candidates),
-                    max(ch.values[metric] for ch in candidates))
+            metric: (min(child.values[metric] for child in candidates),
+                    max(child.values[metric] for child in candidates))
             for metric in metrics
         }
 
