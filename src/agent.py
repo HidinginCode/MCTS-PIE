@@ -14,6 +14,7 @@ class Agent():
         self.path = []
         self.weight_shifted = 0.0
         self.amount_of_shifts = 0
+        self.goal_collected = False
 
     def __str__(self) -> str:
         """String function for the agent.
@@ -141,3 +142,27 @@ class Agent():
             amount (float): Added shifted weight.
         """
         self.weight_shifted += amount
+
+    def get_goal_collected(self) -> bool:
+        """Gets the current status of if the goal has been collected or not.
+
+        Returns:
+            bool: Goal collected status
+        """
+
+        return self.goal_collected
+
+    def set_goal_collected(self, status: bool) -> None:
+        """Method that sets the goal collected status.
+
+        Args:
+            status (bool): Goal collected status
+        """
+
+        self.goal_collected = status
+
+    def change_goal_collected(self) -> None:
+        """Method that changes the goal collected status to its current opposite.
+        """
+
+        self.goal_collected = not self.goal_collected

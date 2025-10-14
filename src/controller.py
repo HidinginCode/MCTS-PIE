@@ -24,6 +24,10 @@ class Controller():
         self.identifcator = id(self)
         self.current_agent_position = list(start_pos)
 
+        # Eliminate obstacles at the start and at the goal position
+        self.map_copy.eliminate_obstacle(start_pos)
+        self.map_copy.eliminate_obstacle(self.map_copy.get_goal())
+
     def __str__(self) -> str:
         """String method for the controller.
 
@@ -160,4 +164,8 @@ class Controller():
             self.current_agent.increase_energy_consumption(obstacle_density_on_pos)
             self.combine_obstacles(new_pos, new_obstacle_pos)
             self.current_agent.increase_amount_of_shifts()
+
+        if new_pos == self.map_copy.get_goal():
+            self.current_agent.change_goal_collected()
+
         return True
