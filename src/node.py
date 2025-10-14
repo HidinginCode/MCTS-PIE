@@ -146,8 +146,8 @@ class Node():
                 copy_controller = deepcopy(self.state.get_state_controller())
 
                 move_valid = copy_controller.move_agent(
-                    move_direction=movement_direction,
-                    shifting_direction=shifting_direction
+                    move_direction=movement_direction.value,
+                    shifting_direction=shifting_direction.value
                 )
 
                 if move_valid:
