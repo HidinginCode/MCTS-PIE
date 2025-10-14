@@ -21,18 +21,21 @@ class Map():
     # Global Arguments for Map Class
     map = []
     map_dim = 0
+    goal = ()
     identificator = None
 
-    def __init__(self, map_dim: int = 10) -> None:
+    def __init__(self, map_dim: int = 5, goal: tuple = (4,4)) -> None:
         """Init function for the map class.
 
         Args:
             map_dim (int): Dimension of the quadratic man (map_dim x map_dim), default = 10
+            goal (tuple): Goal the agent has to reach, default = (9,9)
         """
 
         self.map_dim = map_dim
         self.map = [[random.random() for _ in range(map_dim)] for _ in range(map_dim)]
         self.identificator = id(self)
+        self.goal = goal
 
     def get_map(self) -> list:
         """ Returns the map list.
@@ -72,7 +75,7 @@ class Map():
         return self.map[x][y]
 
     def set_obstacle_denstity(self, pos: tuple, density: float) -> None:
-        """Sets the obstacle density to a specified ammount.
+        """Sets the obstacle density to a specified amount.
 
         Args:
             pos (tuple): Position of the obstacle.
@@ -95,6 +98,24 @@ class Map():
         density_sum = max(density_sum, 0)
 
         self.set_obstacle_denstity(pos=pos, density=density_sum)
+
+    def get_goal(self) -> tuple:
+        """Returns position of the goal.
+
+        Returns:
+            tuple: Position of the goal (x,y)
+        """
+
+        return self.goal
+
+    def set_goal(self, new_goal: tuple):
+        """Sets a new goal on the map.
+
+        Args:
+            new_goal (tuple): New goal (x,y)
+        """
+
+        self.goal = new_goal
 
     def eliminate_obstacle(self, pos: tuple) -> None:
         """Sets the density of an obstacle to 0.
