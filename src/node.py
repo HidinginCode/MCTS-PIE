@@ -220,6 +220,7 @@ class Node():
         )
         # Exclude invalid placeholder children
         candidates = [ch for ch in self.children.values() if ch is not None]
+
         log_parent = math.log(max(1, self.visits))
 
         # Compute min/max metrics among children for normalization
