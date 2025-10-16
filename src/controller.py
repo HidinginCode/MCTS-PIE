@@ -120,7 +120,7 @@ class Controller():
         """
 
         base_position = position or self.current_agent_position
-        new_pos = tuple(sum(coord) for coord in zip(base_position, direction))
+        new_pos = tuple(sum(coord) for coord in zip(base_position, direction.value))
         return self.is_valid_position(new_pos)
 
     def combine_obstacles(self, obstacle_pos: tuple, destination: tuple) -> None:
@@ -161,7 +161,7 @@ class Controller():
         new_pos = tuple(
             sum(coord) for coord in zip(
                 self.current_agent_position,
-                move_direction
+                move_direction.value
             )
         )
 
@@ -172,7 +172,7 @@ class Controller():
         # Check for obstacle on new_pos
         # If there is one we need to do the shifting action
         if self.map_copy.get_obstacle_density(new_pos) > 0:
-            new_obstacle_pos = tuple(sum(coord) for coord in zip(new_pos, shifting_direction))
+            new_obstacle_pos = tuple(sum(coord) for coord in zip(new_pos, shifting_direction.value))
 
             if not self.is_valid_position(new_obstacle_pos):
                 return False
