@@ -158,7 +158,6 @@ class Agent():
         Args:
             status (bool): Goal collected status
         """
-        print(f"Set goal collected to {status}")
         self.goal_collected = status
 
     def change_goal_collected(self) -> None:

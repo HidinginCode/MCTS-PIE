@@ -2,6 +2,8 @@
 
 import logging
 import random
+import tqdm
+
 from node import Node
 
 class McTree():
@@ -12,7 +14,7 @@ class McTree():
         level=logging.INFO,  # or DEBUG for more verbosity
         format="%(asctime)s [%(levelname)s] %(message)s",
         handlers=[
-            logging.StreamHandler()           # and also prints to console
+            logging.StreamHandler()
         ]
     )
 
@@ -74,13 +76,31 @@ class McTree():
             Node: Selected Child node
         """
 
-        depth = 0
+        while True:
+            if current_node.get_state().get_terminal_state():
+                return current_node
+            if not self.is_fully_expanded(current_node):
+                return current_node
 
-        while current_node.get_children():
+            candidates = [
+                child for child in current_node.get_children().values() if child is not None
+            ]
+            if not candidates:
+                return current_node
+
             current_node = current_node.select_child_pareto_ucb()
-            depth +=1
 
-        return current_node
+    def is_fully_expanded(self, node: Node) -> bool:
+        """Checks if a node is fully expanded already.
+
+        Args:
+            node (Node): Node to check
+
+        Returns:
+            bool: Is fully expanded or not
+        """
+        all_valid_directions = node.get_all_valid_directions()
+        return set(node.get_children().keys()) == set(all_valid_directions)
 
     def expand(self, node_to_expand: Node) -> Node:
         """Expands the MCTS tree.
@@ -92,20 +112,18 @@ class McTree():
             Node: Random child node from expanded children
         """
 
-        # If we have reached terminal state do not expand
-
-        #########################################################
         if node_to_expand.get_state().get_terminal_state():
             return node_to_expand
-        #########################################################
+        new_child = node_to_expand.expand()
 
-        node_to_expand.expand()
+        if new_child is not None:
+            return new_child
+
+        # Just keep search moving
         valid_children = [
-            child for child in node_to_expand.get_children().values() if child is not None
-            ]
-        for child in valid_children:
-            if child.get_state().get_terminal_state():
-                return child
+            child for child in node_to_expand.get_children().values()
+            if child is not None
+        ]
         return random.choice(valid_children) if valid_children else node_to_expand
 
     def get_metrics(self, node: Node) -> dict:
@@ -127,12 +145,44 @@ class McTree():
             current_node (Node): Current node from which update starts
         """
 
-        logging.info("Starting backpropagation.")
-        metrics = self.get_metrics(current_node)
+        #logging.info("Starting backpropagation at depth %s", current_node.get_depth())
 
-        while current_node is not None:
-            current_node.update_node(metrics)
-            current_node = current_node.get_parent()
+        node = current_node
+
+        while node is not None:
+            node.increase_visits(1)
+            children = [
+                child for child in node.get_children().values() if child is not None
+            ]
+
+            if not children:
+                # If we are at a leaf we keep the averaged values of the simulation
+                metrics = node.get_values()
+                # Make sure we got front
+                if not node.get_front():
+                    node.set_front([metrics])
+                all_vectors = node.get_front()
+
+            else:
+                # If we have children we compute the average of the childrens metrics
+                metrics = {
+                    key: sum(child.get_values()[key] for child in children) /len(children)
+                    for key in node.get_values()
+                }
+
+                # Collect pareto fronts from children and remove dominated solutions
+                all_vectors = []
+                for child in children:
+                    if child.get_front():
+                        all_vectors.extend(child.get_front())
+                    else:
+                        all_vectors.append(child.get_values())
+
+            node.set_front(node.pareto_reduction(all_vectors))
+
+            # Update value with chosen metric
+            node.set_value(metrics)
+            node = node.get_parent()
 
     def run_search(self, iterations: int = 1) -> None:
         """Runs the MCTS search for a specified number of iterations.
@@ -140,14 +190,18 @@ class McTree():
         Args:
             iterations (int, optional): Number of times to run MCTS. Defaults to 1.
         """
-        for _ in range(iterations):
+        for _ in tqdm.tqdm(range(iterations)):
             leaf = self.select_node(self.root)
-            if leaf.get_state().get_terminal_state():
-                print("FOOKIN FOUND IT")
-                print(str(leaf))
-                input()
+
+
+            #if leaf.get_state().get_terminal_state():
+            #    print("FOOKIN FOUND IT")
+            #    print(str(leaf))
+            #    input()
+
             expanded = self.expand(leaf)
             #if expanded.get_state().get_terminal_state():
             #    logging.info(f"Found terminal state. {str(expanded)}")
             #    break
+            expanded.simulate_leaf(expanded, maximum_depth=3, number_of_simulations=4)
             self.backpropagate(expanded)

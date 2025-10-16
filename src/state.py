@@ -52,11 +52,9 @@ class State():
         """
 
         metric_dict = {
-            "energy_consumed": self.state_agent.get_energy_consumption(),
             "step_count": self.state_agent.get_step_count(),
             "weight_shifted": self.state_agent.get_weight_shifted(),
-            "amount_of_shifts": self.state_agent.get_amount_of_shifts(),
-            "position": self.state_controller.get_current_agent_position()
+            "distance_to_goal": self.state_controller.calculate_distance_to_goal()
         }
 
         return metric_dict

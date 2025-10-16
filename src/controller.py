@@ -108,6 +108,21 @@ class Controller():
 
         return True
 
+    def is_valid_direction(self, direction: Direction, position: tuple | None = None) -> bool:
+        """Checks if a direction is valid from a given position.
+        This check is based on the agents current position if no position is specified.
+
+        Args:
+            direction (Direction): Direction to move in
+
+        Returns:
+            bool: Valid state
+        """
+
+        base_position = position or self.current_agent_position
+        new_pos = tuple(sum(coord) for coord in zip(base_position, direction))
+        return self.is_valid_position(new_pos)
+
     def combine_obstacles(self, obstacle_pos: tuple, destination: tuple) -> None:
         """Combines the densities of 2 obstacles at specified positions.
 
@@ -120,6 +135,17 @@ class Controller():
         self.map_copy.change_obstacle_density(pos = destination, density = obstacle_density)
         self.map_copy.eliminate_obstacle(pos = obstacle_pos)
 
+    def calculate_distance_to_goal(self) -> float:
+        """Calculates the agents distance to the goal.
+
+        Returns:
+            float: Distance to goal
+        """
+
+        goal = self.map_copy.get_goal()
+        position = self.current_agent_position
+
+        return sum(abs(a - b) for a, b in zip(position, goal))
 
     def move_agent(self, move_direction: Direction, shifting_direction: Direction) -> bool:
         """Moves the agent and facilitates map changes.
@@ -141,7 +167,6 @@ class Controller():
 
         # Check if new position is valid
         if not self.is_valid_position(new_pos):
-            #print(f"Tried to move the agent to an invalid position ({new_pos}).")
             return False
 
         # Check for obstacle on new_pos
@@ -150,11 +175,10 @@ class Controller():
             new_obstacle_pos = tuple(sum(coord) for coord in zip(new_pos, shifting_direction))
 
             if not self.is_valid_position(new_obstacle_pos):
-                #print(f"Tried to shift obstacle to invalid position {new_obstacle_pos}.")
                 return False
 
             obstacle_density_on_pos = self.map_copy.get_obstacle_density(new_pos)
-            self.current_agent.increase_energy_consumption(obstacle_density_on_pos)
+            self.current_agent.increase_weight_shifted(obstacle_density_on_pos)
             self.combine_obstacles(new_pos, new_obstacle_pos)
             self.current_agent.increase_amount_of_shifts()
 

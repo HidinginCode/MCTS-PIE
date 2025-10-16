@@ -3,6 +3,7 @@
 from __future__ import annotations
 import math
 import random
+from multiprocessing import Pool
 from copy import deepcopy
 from directions import Direction
 from state import State
@@ -18,22 +19,41 @@ class Node():
             parent (Node | None, optional): Parent node. Defaults to None.
         """
 
+        self.depth = parent.depth + 1 if parent else 0
         self.state = deepcopy(state)
         self.parent = parent
         self.children = {}
         self.identificator = id(self)
         self.visits = 0
         self.values = {
-            "energy_consumed": 0.0,
             "step_count": 0,
             "weight_shifted": 0.0,
-            "amount_of_shifts": 0
+            "distance_to_goal": 0,
         }
         self.ucb_vector = {}
+        self.front = []
 
     def __str__(self):
         """String method for the node class."""
         return f"Visits: {self.visits}\nValues: {self.values}"
+
+    def get_depth(self) -> int:
+        """Returns the depth of a node.
+
+        Returns:
+            int: Depth of node
+        """
+
+        return self.depth
+
+    def set_depth(self, depth: int) -> None:
+        """Sets a specified depth for the node.
+
+        Args:
+            depth (int): depth
+        """
+
+        self.depth = depth
 
     def get_state(self) -> State:
         """Returns the state of the current node.
@@ -151,16 +171,32 @@ class Node():
 
         self.ucb_vector = new_vector
 
-    def expand(self) -> None:
-        """Expands the node, creating new children for all direction pairs 
-        (movement_direction, shifting_direction)."""
+    def get_front(self) -> list:
+        """Returns the pareto front of the current node.
 
-        assert not self.children, (
-            "Tried to expand on a node that already had children."
-        )
+        Returns:
+            list: Pareto front
+        """
 
-        # We create 12 children, one for each movement and shiftind direction
-        # (excluding the agents own position)
+        return self.front
+
+    def set_front(self, front: list) -> None:
+        """Sets a specified front for the node.
+
+        Args:
+            front (list): Front to be set
+        """
+
+        self.front = front
+
+    def get_all_valid_directions(self) -> list:
+        """Returns all valid pairs of movement and shifting 
+        direction that would be valid in this state.
+
+        Returns:
+            list: Valid pairs
+        """
+        all_valid_pairs = []
         for movement_direction in Direction:
             for shifting_direction in Direction:
                 # We need the controller, the agent and the map to see if the action is valid
@@ -171,14 +207,42 @@ class Node():
                     move_direction=movement_direction.value,
                     shifting_direction=shifting_direction.value
                 )
-
                 if move_valid:
-                    new_state = State(state_controller = copy_controller)
-                    new_node = Node(state=new_state, parent=self)
+                    all_valid_pairs.append((movement_direction, shifting_direction))
 
-                    self.children[(movement_direction, shifting_direction)] = new_node
-                else:
-                    self.children[(movement_direction, shifting_direction)] = None
+        return all_valid_pairs
+
+
+    def get_untried_directions(self) -> list:
+        """Returns all actions that werent tried on this node by now.
+
+        Returns:
+            list: Untried actions
+        """
+        tried_directions = set(self.children.keys())
+        return[a for a in self.get_all_valid_directions() if a not in tried_directions]
+
+
+    def expand(self) -> Node | None:
+        """Expands the node, creating new children for an unexpanded direction if there is one.
+        (movement_direction, shifting_direction)."""
+
+        if self.state.get_terminal_state():
+            return None
+
+        untried_directions = self.get_untried_directions()
+        if not untried_directions:
+            return None
+
+        random.shuffle(untried_directions)
+        for movement_direction, shifting_direction in untried_directions:
+            controller = deepcopy(self.state.get_state_controller())
+            controller.move_agent(movement_direction.value, shifting_direction.value)
+            child = Node(state=State(controller), parent=self)
+            self.children[(movement_direction, shifting_direction)] = child
+
+            return child
+
 
     def update_node(self, metrics: dict):
         """Update means for each objective.
@@ -190,7 +254,7 @@ class Node():
         for key in self.values.keys():
             # Calculate the mean for each objective
             float_metric = float(metrics[key])
-            self.values[key]+= (float_metric - self.values[key]) / self.visits
+            self.values[key] += (float_metric - self.values[key]) / self.visits
 
     def dominates(
             self,
@@ -207,8 +271,26 @@ class Node():
             bool: Domination truth value
         """
 
-        return all(node_a_metrics[key] <= node_b_metrics[key] for key in node_a_metrics) \
-        and any(node_a_metrics[key] < node_b_metrics[key] for key in node_a_metrics)
+        return all(node_a_metrics[key] >= node_b_metrics[key] for key in node_a_metrics) \
+        and any(node_a_metrics[key] > node_b_metrics[key] for key in node_a_metrics)
+
+    def pareto_reduction(self, vectors: list[dict]) -> list[dict]:
+        """Removes dominated solutions and creates the pareto front.
+
+        Args:
+            vectors (list[dict]): All solution vectors
+
+        Returns:
+            list[dict]: Pareto front
+        """
+
+        front = []
+        for vector in vectors:
+            if not any(self.dominates(member, vector) for member in front):
+                # Remove members from pareto front dominated by vector
+                front = [member for member in front if not self.dominates(vector, member)]
+                front.append(vector)
+        return front
 
     def select_child_pareto_ucb(self, c: float = 1.4) -> Node:
         """Method for selecting a child from the ucb pareto front.
@@ -225,7 +307,13 @@ class Node():
         # Exclude invalid placeholder children
         candidates = [child for child in self.children.values() if child is not None]
 
-        log_parent = math.log(max(1, self.visits))
+        # Handle unvisited children
+        unvisited = [child for child in candidates if child.get_visits() == 0]
+
+        if unvisited:
+            return random.choice(unvisited)
+
+        log_parent = math.log(self.get_visits() + 1)
 
         # Compute min/max metrics among children for normalization
         metrics = list(self.values.keys())
@@ -238,19 +326,14 @@ class Node():
         # Compute per-objective UCB
         for child in candidates:
 
-            # Safety check for children with no visits
-            if child.visits == 0:
-                child.set_ucb_vector({m: -float("inf") for m in metrics})
-                continue
-
             child.set_ucb_vector({
                 metric: (
-                    (0.0 if stats[metric][1] == stats[metric][0]
-                    else (child.values[metric] - stats[metric][0]) /
-                    (stats[metric][1] - stats[metric][0]))
-                    - c * math.sqrt(log_parent / child.visits)
+                    # We flip the scale so smaller = higher score since we want to minimize
+                    (stats[metric][1] - child.values[metric]) /
+                    (stats[metric][1] - stats[metric][0] + 1e-9)
+                    + c * math.sqrt(log_parent / child.visits)
                 )
-            for metric in metrics
+                for metric in metrics
             })
 
         # Pareto front extraction
@@ -259,3 +342,83 @@ class Node():
             if not any(self.dominates(b.ucb_vector, a.ucb_vector) for b in candidates)]
 
         return random.choice(pareto or candidates)
+
+    @staticmethod
+    def _simulate_leaf_worker(args: tuple):
+        """Wrapper for multiprocessing
+
+        Args:
+            args (tuple): Arguments that should be passed into actual method
+        """
+        self_reference, leaf_node, maximum_depth = args
+        return self_reference.multiprocessing_leaf_simulation(leaf_node, maximum_depth)
+
+    def simulate_leaf(
+            self,
+            leaf_node: Node,
+            maximum_depth: int = 15,
+            number_of_simulations: int = 10
+    ) -> None:
+        """Simulates from a given leaf node by applying random valid actions.
+
+        Args:
+            leaf_node (Node): Leaf node from which to start the simulation
+            maximum_depth (int, optional): Maximum moves that will be simulated. Defaults to 15.
+        """
+
+        # Make an independent copy of the node to simulate on
+        solutions = []
+
+        with Pool(number_of_simulations) as pool:
+            args = [(self, leaf_node, maximum_depth) for _ in range(number_of_simulations)]
+            results = pool.map(Node._simulate_leaf_worker, args)
+
+        # Flatten results (list of lists of dicts)
+        solutions = [state for rollout in results for state in rollout]
+
+        # Handle case where no moves were possible
+        if not solutions:
+            solutions.append(leaf_node.get_state().get_state_metrics())
+
+        # Compute average metrics over the simulated rollout
+        averages = {
+            key: sum(d[key] for d in solutions) / len(solutions)
+            for key in solutions[0]
+        }
+
+        # Update node values and store Pareto front
+        leaf_node.set_value(averages)
+        leaf_node.set_front(leaf_node.pareto_reduction(solutions))
+
+
+    def multiprocessing_leaf_simulation(self, leaf_node: Node, maximum_depth: int) -> list:
+        """Multiprocessing function to simulate all actions for a leaf and collect the solutions.
+
+        Args:
+            leaf_node (Node): Leaf node from which to simulate
+            maximum_depth (int): Maximum simulation depth
+
+        Returns:
+            list: solutions
+        """
+        depth = 0
+        solutions = []
+        leaf_copy = deepcopy(leaf_node)
+        controller = leaf_copy.get_state().get_state_controller()
+
+        while not leaf_copy.get_state().get_terminal_state() and depth < maximum_depth:
+            valid_pairs = leaf_copy.get_all_valid_directions()
+            if not valid_pairs:
+                break
+
+            movement_direction, shifting_direction = random.choice(valid_pairs)
+            controller.move_agent(
+                move_direction=movement_direction.value,
+                shifting_direction=shifting_direction.value
+            )
+
+            depth += 1
+            current_state = State(state_controller=controller)
+            solutions.append(current_state.get_state_metrics())
+
+        return solutions
