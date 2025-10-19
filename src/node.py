@@ -1,9 +1,6 @@
 """This module represents a the node class for the MCTS tree."""
 
 from __future__ import annotations
-import math
-import random
-from multiprocessing import Pool
 from copy import deepcopy
 from directions import Direction
 from state import State
@@ -35,7 +32,7 @@ class Node():
 
     def __str__(self):
         """String method for the node class."""
-        return f"Visits: {self.visits}\nValues: {self.values}"
+        return f"Visits: {self.visits}\nValues: {self.values}\nID: {self.identificator}"
 
     def get_depth(self) -> int:
         """Returns the depth of a node.
@@ -144,281 +141,169 @@ class Node():
 
         return self.values
 
-    def set_value(self, values: dict) -> None:
+    def set_value(self, key: any, value: int | float) -> None:
         """Sets the value to a specified amount.
 
         Args:
+            key: Key in values dictionary
             value (float): New value
         """
 
-        self.values = values
+        self.values[key] = value
 
-    def get_ucb_vector(self) -> dict:
-        """Returns the ucb vector of the node.
-
-        Returns:
-            dict: Ucb vector
-        """
-
-        return self.ucb_vector
-
-    def set_ucb_vector(self, new_vector: dict) -> None:
-        """Sets a new ucb vector for a node.
+    def set_values(self, values: dict) -> None:
+        """Sets the full dict of values to a specified one.
 
         Args:
-            new_vector (dict): New ucb vector
+            values (dict): New value dict
         """
-
-        self.ucb_vector = new_vector
+        self.values = values
 
     def get_front(self) -> list:
-        """Returns the pareto front of the current node.
+        """Returns the pareto front of all children.
+
+        Returns:
+            list: Pareto front of children
+        """
+        return self.front
+
+    def set_front(self, front: list) -> None:
+        """Sets the pareto front for this node.
+
+        Args:
+            front (list): New pareto front.
+        """
+        self.front = front
+
+    def get_all_valid_actions(self) -> list:
+        """Returns all valid actions in this state.
+
+        Returns:
+            list: List of movement and shfiting direction tuples.
+        """
+
+        valid_action_pairs = []
+
+        controller = self.get_state().get_state_controller()
+        for move_direction in Direction:
+
+            # See if direction is valid
+            move_valid = controller.is_valid_direction(
+                            move_direction,
+                            controller.get_current_agent_position()
+                        )
+
+            if move_valid:
+                for shift_direction in Direction:
+
+                    new_pos = tuple(
+                        sum(coord) for coord in zip(
+                                controller.get_current_agent_position(),
+                                move_direction.value)
+                    )
+
+                    # See if shift is valid from new pos
+                    shift_valid = controller.is_valid_direction(
+                        shift_direction,
+                        new_pos
+                    )
+
+                    if shift_valid:
+                        valid_action_pairs.append((move_direction, shift_direction))
+
+        return valid_action_pairs
+
+    def get_untried_actions(self) -> list:
+        """Returns valid actions that are not yet expanded on.
+
+        Returns:
+            list: New valid actions
+        """
+        all_valid_actions = self.get_all_valid_actions()
+        expanded_actions = [child for child in self.children.keys()]
+
+        untried_actions = [pair for pair in all_valid_actions if pair not in expanded_actions]
+
+        return untried_actions
+
+    def is_fully_expanded(self) -> bool:
+        """Method that determines if a node is fully expanded."""
+
+        untried_actions = self.get_untried_actions()
+        if len(untried_actions) == 0:
+            return True
+        return False
+
+    def is_dominated(self, node: Node) -> bool:
+        """Determines if the current node is dominated by the specified one.
+
+        Args:
+            node (Node): Node to be checked for domination.
+
+        Returns:
+            bool: Is dominated or not
+        """
+        node_values = node.get_values()
+        return(
+            all(node_values[key] <= self.values[key] for key in node_values.keys()) and
+            any(node_values[key] < self.values[key] for key in node_values.keys())
+        )
+
+    def determine_pareto_front(self) -> list:
+        """Determines the pareto front, based on childrens metrics.
 
         Returns:
             list: Pareto front
         """
 
-        return self.front
+        # At first all children are in front
+        children = list(self.children.values())
+        non_dominated_children = []
 
-    def set_front(self, front: list) -> None:
-        """Sets a specified front for the node.
+        # Then we remove them when they are domianted
+        for child1 in children:
+            # Domination flag
+            dominated = False
 
-        Args:
-            front (list): Front to be set
-        """
+            for child2 in children:
+                if child1 is child2:
+                    continue
 
-        self.front = front
+                if child1.is_dominated(child2):
+                    dominated = True
+                    break
 
-    def get_all_valid_directions(self) -> list:
-        """Returns all valid pairs of movement and shifting 
-        direction that would be valid in this state.
+            if not dominated:
+                non_dominated_children.append(child1)
 
-        Returns:
-            list: Valid pairs
-        """
-        all_valid_pairs = []
-        for movement_direction in Direction:
-            for shifting_direction in Direction:
-                # We need the controller, the agent and the map to see if the action is valid
-                # If it is we can create a leaf node, if not we put a None entry as placeholder
-                copy_controller = deepcopy(self.state.get_state_controller())
-
-                move_valid = copy_controller.move_agent(
-                    move_direction=movement_direction.value,
-                    shifting_direction=shifting_direction.value
-                )
-                if move_valid:
-                    all_valid_pairs.append((movement_direction, shifting_direction))
-
-        return all_valid_pairs
-
-
-    def get_untried_directions(self) -> list:
-        """Returns all actions that werent tried on this node by now.
-
-        Returns:
-            list: Untried actions
-        """
-        tried_directions = set(self.children.keys())
-        return[a for a in self.get_all_valid_directions() if a not in tried_directions]
-
-
-    def expand(self) -> Node | None:
-        """Expands the node, creating new children for an unexpanded direction if there is one.
-        (movement_direction, shifting_direction)."""
-
-        if self.state.get_terminal_state():
-            return None
-
-        untried_directions = self.get_untried_directions()
-        if not untried_directions:
-            return None
-
-        random.shuffle(untried_directions)
-        for movement_direction, shifting_direction in untried_directions:
-            controller = deepcopy(self.state.get_state_controller())
-            controller.move_agent(movement_direction.value, shifting_direction.value)
-            child = Node(state=State(controller), parent=self)
-            self.children[(movement_direction, shifting_direction)] = child
-
-            return child
-
-
-    def update_node(self, metrics: dict):
-        """Update means for each objective.
-
-        Args:
-            metrics (dict): Metrics used for the update
-        """
-        self.visits += 1
-        for key in self.values.keys():
-            # Calculate the mean for each objective
-            float_metric = float(metrics[key])
-            self.values[key] += (float_metric - self.values[key]) / self.visits
-
-    def dominates(
-            self,
-            node_a_metrics: dict[str, float|int],
-            node_b_metrics: dict[str, float|int]
-        ) -> bool:
-        """Tests for dominance and returns true if vector a dominates vector b
-
-        Args:
-            node_a_metrics (dict[str, float | int]): Metrics of the first node
-            node_b_metrics (dict[str, float | int]): Metrics of the second node
-
-        Returns:
-            bool: Domination truth value
-        """
-
-        return all(node_a_metrics[key] >= node_b_metrics[key] for key in node_a_metrics) \
-        and any(node_a_metrics[key] > node_b_metrics[key] for key in node_a_metrics)
-
-    def pareto_reduction(self, vectors: list[dict]) -> list[dict]:
-        """Removes dominated solutions and creates the pareto front.
-
-        Args:
-            vectors (list[dict]): All solution vectors
-
-        Returns:
-            list[dict]: Pareto front
-        """
-
-        front = []
-        for vector in vectors:
-            if not any(self.dominates(member, vector) for member in front):
-                # Remove members from pareto front dominated by vector
-                front = [member for member in front if not self.dominates(vector, member)]
-                front.append(vector)
-        return front
-
-    def select_child_pareto_ucb(self, c: float = 1.4) -> Node:
-        """Method for selecting a child from the ucb pareto front.
-
-        Args:
-            c (float, optional): C value. Defaults to 1.4.
-
-        Returns:
-            Node: Selected child
-        """
-        assert self.children, (
-            "No children to select from."
-        )
-        # Exclude invalid placeholder children
-        candidates = [child for child in self.children.values() if child is not None]
-
-        # Handle unvisited children
-        unvisited = [child for child in candidates if child.get_visits() == 0]
-
-        if unvisited:
-            return random.choice(unvisited)
-
-        log_parent = math.log(self.get_visits() + 1)
-
-        # Compute min/max metrics among children for normalization
-        metrics = list(self.values.keys())
-        stats = {
-            metric: (min(child.values[metric] for child in candidates),
-                    max(child.values[metric] for child in candidates))
-            for metric in metrics
-        }
-
-        # Compute per-objective UCB
-        for child in candidates:
-
-            child.set_ucb_vector({
-                metric: (
-                    # We flip the scale so smaller = higher score since we want to minimize
-                    (stats[metric][1] - child.values[metric]) /
-                    (stats[metric][1] - stats[metric][0] + 1e-9)
-                    + c * math.sqrt(log_parent / child.visits)
-                )
-                for metric in metrics
-            })
-
-        # Pareto front extraction
-        pareto = [
-            a for a in candidates
-            if not any(self.dominates(b.ucb_vector, a.ucb_vector) for b in candidates)]
-
-        return random.choice(pareto or candidates)
+        return non_dominated_children
 
     @staticmethod
-    def _simulate_leaf_worker(args: tuple):
-        """Wrapper for multiprocessing
+    def determine_pareto_from_list(all_nodes: list[Node]) -> list:
+        """Determines a pareto front from a list of nodes.
 
         Args:
-            args (tuple): Arguments that should be passed into actual method
-        """
-        self_reference, leaf_node, maximum_depth = args
-        return self_reference.multiprocessing_leaf_simulation(leaf_node, maximum_depth)
-
-    def simulate_leaf(
-            self,
-            leaf_node: Node,
-            maximum_depth: int = 15,
-            number_of_simulations: int = 10
-    ) -> None:
-        """Simulates from a given leaf node by applying random valid actions.
-
-        Args:
-            leaf_node (Node): Leaf node from which to start the simulation
-            maximum_depth (int, optional): Maximum moves that will be simulated. Defaults to 15.
-        """
-
-        # Make an independent copy of the node to simulate on
-        solutions = []
-
-        with Pool(number_of_simulations) as pool:
-            args = [(self, leaf_node, maximum_depth) for _ in range(number_of_simulations)]
-            results = pool.map(Node._simulate_leaf_worker, args)
-
-        # Flatten results (list of lists of dicts)
-        solutions = [state for rollout in results for state in rollout]
-
-        # Handle case where no moves were possible
-        if not solutions:
-            solutions.append(leaf_node.get_state().get_state_metrics())
-
-        # Compute average metrics over the simulated rollout
-        averages = {
-            key: sum(d[key] for d in solutions) / len(solutions)
-            for key in solutions[0]
-        }
-
-        # Update node values and store Pareto front
-        leaf_node.set_value(averages)
-        leaf_node.set_front(leaf_node.pareto_reduction(solutions))
-
-
-    def multiprocessing_leaf_simulation(self, leaf_node: Node, maximum_depth: int) -> list:
-        """Multiprocessing function to simulate all actions for a leaf and collect the solutions.
-
-        Args:
-            leaf_node (Node): Leaf node from which to simulate
-            maximum_depth (int): Maximum simulation depth
+            all_nodes (list[Node]): All possible nodes.
 
         Returns:
-            list: solutions
+            list: Pareto front of nodes.
         """
-        depth = 0
-        solutions = []
-        leaf_copy = deepcopy(leaf_node)
-        controller = leaf_copy.get_state().get_state_controller()
+        non_dominated_nodes = []
 
-        while not leaf_copy.get_state().get_terminal_state() and depth < maximum_depth:
-            valid_pairs = leaf_copy.get_all_valid_directions()
-            if not valid_pairs:
-                break
+        # Then we remove them when they are domianted
+        for child1 in all_nodes:
+            # Domination flag
+            dominated = False
 
-            movement_direction, shifting_direction = random.choice(valid_pairs)
-            controller.move_agent(
-                move_direction=movement_direction.value,
-                shifting_direction=shifting_direction.value
-            )
+            for child2 in all_nodes:
+                if child1 is child2:
+                    continue
 
-            depth += 1
-            current_state = State(state_controller=controller)
-            solutions.append(current_state.get_state_metrics())
+                if child1.is_dominated(child2):
+                    dominated = True
+                    break
 
-        return solutions
+            if not dominated:
+                non_dominated_nodes.append(child1)
+
+        return non_dominated_nodes
