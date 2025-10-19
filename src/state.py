@@ -1,5 +1,6 @@
 """This module contains the state class which represents the state in a mcts node."""
 
+from __future__ import annotations
 from copy import deepcopy
 from controller import Controller
 from agent import Agent
@@ -17,6 +18,18 @@ class State():
         self.state_controller = deepcopy(state_controller)
         self.state_agent = self.state_controller.get_current_agent()
         self.identificator = id(self)
+
+    def clone(self) -> State:
+        """Returns a clone of the state without using deepcopy.
+
+        Returns:
+            State: Clone of state
+        """
+        new_state = State.__new__(State)
+        new_state.state_controller = self.state_controller.clone()
+        new_state.state_agent = new_state.state_controller.get_current_agent()
+        new_state.identificator = id(new_state)
+        return new_state
 
     def get_state_agent(self) -> Agent:
         """Returns the agent for the current state.

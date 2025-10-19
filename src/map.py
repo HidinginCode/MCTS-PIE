@@ -5,8 +5,8 @@ with values between 0 and 1 (density) on creation. The map is initialized with r
 values in this range. Obstacles can later be combined to a weight bigger than 1,
 but take more energy to move again after that.
 """
-
-import random
+from __future__ import annotations
+import numpy as np
 
 class Map():
     """This class holds the map object.
@@ -29,11 +29,21 @@ class Map():
         """
 
         self.map_dim = map_dim
-        self.map = [[random.random() for _ in range(map_dim)] for _ in range(map_dim)]
+        self.map = np.random.random((map_dim, map_dim))
         self.identificator = id(self)
         self.goal = goal
 
-    def get_map(self) -> list:
+    def clone(self) -> Map:
+        """Clones the map and returns an independent copy.
+
+        Returns:
+            Map: Cloned map
+        """
+        cloned_map = Map(map_dim=self.map_dim, goal=self.goal)
+        cloned_map.map = self.map.copy()  # independent NumPy array copy
+        return cloned_map
+
+    def get_map(self) -> np.ndarray:
         """ Returns the map list.
 
         Returns:
@@ -70,7 +80,7 @@ class Map():
         x,y = pos
         return self.map[x][y]
 
-    def set_obstacle_denstity(self, pos: tuple, density: float) -> None:
+    def set_obstacle_density(self, pos: tuple, density: float) -> None:
         """Sets the obstacle density to a specified amount.
 
         Args:
@@ -93,7 +103,7 @@ class Map():
 
         density_sum = max(density_sum, 0)
 
-        self.set_obstacle_denstity(pos=pos, density=density_sum)
+        self.set_obstacle_density(pos=pos, density=density_sum)
 
     def get_goal(self) -> tuple:
         """Returns position of the goal.
@@ -120,4 +130,4 @@ class Map():
             pos (tuple): Position of the obstacle that will be eliminated (x,y).
         """
 
-        self.set_obstacle_denstity(pos=pos, density=0)
+        self.set_obstacle_density(pos=pos, density=0)

@@ -186,7 +186,7 @@ class McTree():
         solutions = []
 
         for _ in range(number_of_sims):
-            leaf_copy = Node(leaf.get_state(), leaf.get_parent())
+            leaf_copy = leaf.clone()
             copy_controller = leaf_copy.get_state().get_state_controller()
             for _ in range(maximum_depth):
                 if leaf_copy.get_state().get_terminal_state():
@@ -276,7 +276,7 @@ class McTree():
                 if goal == pos and leaf not in solutions:
                     print(f"Found new solution at depth {leaf.get_depth()}")
                     solutions.append(leaf)
-                self.simulate_leaf(leaf, 5, 500)
+                self.simulate_leaf(leaf, 2, 500)
                 new_child = self.expand(leaf)
                 self.backpropagate(new_child)
 
