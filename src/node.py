@@ -18,6 +18,7 @@ class Node():
 
         self.depth = parent.depth + 1 if parent else 0
         self.state = deepcopy(state)
+        self.parent_actions = None
         self.parent = parent
         self.children = {}
         self.identificator = id(self)
@@ -51,6 +52,7 @@ class Node():
         new_node.values = self.values.copy()
         new_node.ucb_vector = {}
         new_node.front = []
+        new_node.parent_actions = self.parent_actions
         return new_node
 
     def get_depth(self) -> int:
@@ -96,6 +98,23 @@ class Node():
             parent (Node | None): New parent for node
         """
         self.parent = parent
+
+    def get_parent_actions(self) -> tuple:
+        """Returns action tuple that spawned this node.
+
+        Returns:
+            tuple: Action combination
+        """
+        return self.parent_actions
+
+    def set_parent_actions(self, actions: tuple) -> None:
+        """Sets the action combination from which this node was generated.
+
+        Args:
+            actions (tuple): Action tuple
+        """
+
+        self.parent_actions = actions
 
     def get_children(self) -> dict | None :
         """Returns children of the current Node.

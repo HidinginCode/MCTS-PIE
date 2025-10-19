@@ -114,13 +114,14 @@ class McTree():
         visits = [child.get_visits() for child in front]
 
 
-        if all(v == 0 for v in visits):
+        if any(v == 0 for v in visits):
             probabilities = [1 / len(front)] * len(front)
         else:
             total_visits = sum(visits)
             probabilities = [v / total_visits for v in visits]
 
         return random.choices(front, probabilities, k=1)[0]
+        #return random.choice(front)
 
     def expand(self, node: Node) -> Node:
         """Creates a child for a given node.
@@ -141,6 +142,7 @@ class McTree():
         child = Node(node.get_state(), node)
         child.get_state().get_state_controller().move_agent(move_direction, shift_direction)
         child.values = child.get_state().get_state_metrics()
+        child.parent_actions = (move_direction.name, shift_direction.name)
         node.children[(move_direction, shift_direction)] = child
 
         return child
@@ -280,12 +282,17 @@ class McTree():
                 new_child = self.expand(leaf)
                 self.backpropagate(new_child)
 
+        solutions = Node.determine_pareto_from_list(solutions)
         for solution in solutions:
             node = solution
             path = []
+            actions = []
             while node is not None:
                 path.append(node.get_state().get_state_controller().get_current_agent_position())
+                actions.append(node.get_parent_actions())
                 node = node.get_parent()
             print("####################################################################")
             path.reverse()
+            actions.reverse()
             print(path)
+            print(actions)
