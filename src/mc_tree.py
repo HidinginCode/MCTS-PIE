@@ -3,7 +3,12 @@
 from copy import deepcopy
 import logging
 import random
+#from multiprocessing import Pool
+import os
+import time
+import pickle
 
+from tqdm import tqdm
 from node import Node
 
 class McTree():
@@ -18,16 +23,15 @@ class McTree():
         ]
     )
 
-    def __init__(self, root: Node, max_depth: int):
+    def __init__(self, root: Node):
         """Init method for McTree.
 
         Args:
             root (Node): Root node of tree
             max_depth (int): Max depth of tree
         """
-
         self.root = root
-        self.max_depth = max_depth
+        self.max_depth = None
         self.identificator = id(self)
 
     def get_root(self) -> Node:
@@ -102,7 +106,21 @@ class McTree():
         if len(node.get_front()) == 0:
             node.set_front(node.determine_pareto_front())
 
-        return random.choice(node.get_front())
+        if len(node.get_front()) == 0:
+            print(f"Number of children: {len(node.get_children())}")
+            input()
+
+        front = node.get_front()
+        visits = [child.get_visits() for child in front]
+
+
+        if all(v == 0 for v in visits):
+            probabilities = [1 / len(front)] * len(front)
+        else:
+            total_visits = sum(visits)
+            probabilities = [v / total_visits for v in visits]
+
+        return random.choices(front, probabilities, k=1)[0]
 
     def expand(self, node: Node) -> Node:
         """Creates a child for a given node.
@@ -119,12 +137,101 @@ class McTree():
         move_direction, shift_direction = random.choice(untried_actions)
 
         # Create new child and move it
-        child = Node(deepcopy(node.get_state()), node)
+        # No need to deepcopy state, it is deepcopied in childs constructor
+        child = Node(node.get_state(), node)
         child.get_state().get_state_controller().move_agent(move_direction, shift_direction)
         child.values = child.get_state().get_state_metrics()
         node.children[(move_direction, shift_direction)] = child
 
         return child
+
+    def simulate_leaf(self, leaf: Node, number_of_simulations: int, maximum_moves: int) -> None:
+        """Function that simulates random rollouts from a leaf.
+
+        Args:
+            leaf (Node): Leaf node
+            number_of_simulations (int): Number of simulations
+            maximum_moves (int): Maximum number of moves per simulation
+        """
+
+        # Pre pickle leaf to avoid overhead
+        # pickled_leaf = pickle.dumps(leaf)
+
+        # if not leaf.get_state().get_terminal_state():
+        #     # Obtain list of nodes from multiprocessing
+        #     results = self.mult_pool.map(
+        #         self.multiprocess_leaf_simulation,
+        #         [(pickled_leaf, maximum_moves)] * number_of_simulations
+        #     )
+
+        results = self.iterative_leaf_simulation(leaf, number_of_simulations, maximum_moves)
+
+        if results:
+            non_dominated_results = leaf.determine_pareto_from_list(results)
+            leaf.set_values(random.choice(non_dominated_results).get_values())
+
+    @staticmethod
+    def iterative_leaf_simulation(leaf: Node, number_of_sims: int, maximum_depth: int)->list[Node]:
+        """Method that iteratively does the leaf simulations.
+
+        Args:
+            leaf (Node): Leaf for start of simulations
+            number_of_sims (int): Number of simulations
+            maximum_depth (int): Maximum number of views
+
+        Returns:
+            Node: Simulation solutions
+        """
+
+        solutions = []
+
+        for _ in range(number_of_sims):
+            leaf_copy = Node(leaf.get_state(), leaf.get_parent())
+            copy_controller = leaf_copy.get_state().get_state_controller()
+            for _ in range(maximum_depth):
+                if leaf_copy.get_state().get_terminal_state():
+                    break
+                valid_moves = leaf_copy.get_all_valid_actions()
+                move_direction, shift_direction= random.choice(valid_moves)
+                copy_controller.move_agent(move_direction, shift_direction)
+
+            solutions.append(leaf_copy)
+
+        return solutions
+
+    @staticmethod
+    def multiprocess_leaf_simulation(args: tuple[Node, int]) -> Node:
+        """Multiprocessing wrapper for leaf simulation.
+
+        Args:
+            args (any): Simulation Args
+
+        Returns:
+            Node: Copy of node after simulations
+        """
+        # Get random state for all workers
+        random.seed(os.getpid() + time.time_ns())
+
+
+        pickled_leaf, maximum_moves = args
+
+        leaf = pickle.loads(pickled_leaf)
+
+        # Copy leaf for independent states
+        leaf_copy = deepcopy(leaf)
+        copy_controller = leaf_copy.get_state().get_state_controller()
+
+        for _ in range (maximum_moves):
+
+            # Check if terminal state was reached
+            if leaf_copy.get_state().get_terminal_state():
+                break
+
+            valid_moves = leaf_copy.get_all_valid_actions()
+            move_direction, shift_direction= random.choice(valid_moves)
+            copy_controller.move_agent(move_direction, shift_direction)
+
+        return leaf_copy
 
     def backpropagate(self, node: Node) -> None:
         """Backpropagates metrics from the new child node through the parents.
@@ -156,9 +263,29 @@ class McTree():
         Args:
             iterations (int, optional): Number of times to run MCTS. Defaults to 1.
         """
-        for _ in range(iterations):
+
+        solutions = []
+
+        for _ in tqdm(range(iterations)):
             leaf = self.select_node(self.root)
 
             if leaf is not None:
+                goal = leaf.get_state().get_state_controller().get_map_copy().get_goal()
+                pos = leaf.get_state().get_state_controller().get_current_agent_position()
+
+                if goal == pos and leaf not in solutions:
+                    print(f"Found new solution at depth {leaf.get_depth()}")
+                    solutions.append(leaf)
+                self.simulate_leaf(leaf, 5, 500)
                 new_child = self.expand(leaf)
                 self.backpropagate(new_child)
+
+        for solution in solutions:
+            node = solution
+            path = []
+            while node is not None:
+                path.append(node.get_state().get_state_controller().get_current_agent_position())
+                node = node.get_parent()
+            print("####################################################################")
+            path.reverse()
+            print(path)

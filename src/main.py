@@ -1,7 +1,7 @@
 """ This module contains the main method that is used for non-cluster tests"""
 
-#import matplotlib.pyplot as plt
-#import networkx as nx
+# import matplotlib.pyplot as plt
+# import networkx as nx
 from state import State
 from agent import Agent
 from map import Map
@@ -12,18 +12,18 @@ from controller import Controller
 def main():
     """ Main method that runs all components togehter"""
 
-    test_map = Map(map_dim=2, goal=(1,1))
+    test_map = Map(map_dim=5, goal=(4,4))
     agent = Agent()
     controller = Controller(map_copy=test_map, current_agent=agent)
 
     root_state = State(state_controller=controller)
     root_node = Node(state=root_state)
 
-    tree = McTree(root=root_node, max_depth=15)
+    tree = McTree(root=root_node)
 
     print("Starting MCTS ...")
-    tree.run_search(5000)
-#   visualize_tree_hierarchical(root_node, max_depth=10, show_metrics=False, save_to_file=True)
+    tree.run_search(60000)
+#     visualize_tree_hierarchical(root_node, max_depth=10, show_metrics=False, save_to_file=True)
 
 
 # def hierarchy_pos(graph, root=None, width=1.0, vert_gap=0.3, vert_loc=0, xcenter=0.5):

@@ -151,6 +151,14 @@ class Node():
 
         self.values[key] = value
 
+    def set_values(self, values: dict) -> None:
+        """Sets the full dict of values to a specified one.
+
+        Args:
+            values (dict): New value dict
+        """
+        self.values = values
+
     def get_front(self) -> list:
         """Returns the pareto front of all children.
 
@@ -269,3 +277,33 @@ class Node():
                 non_dominated_children.append(child1)
 
         return non_dominated_children
+
+    @staticmethod
+    def determine_pareto_from_list(all_nodes: list[Node]) -> list:
+        """Determines a pareto front from a list of nodes.
+
+        Args:
+            all_nodes (list[Node]): All possible nodes.
+
+        Returns:
+            list: Pareto front of nodes.
+        """
+        non_dominated_nodes = []
+
+        # Then we remove them when they are domianted
+        for child1 in all_nodes:
+            # Domination flag
+            dominated = False
+
+            for child2 in all_nodes:
+                if child1 is child2:
+                    continue
+
+                if child1.is_dominated(child2):
+                    dominated = True
+                    break
+
+            if not dominated:
+                non_dominated_nodes.append(child1)
+
+        return non_dominated_nodes

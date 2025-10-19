@@ -66,4 +66,7 @@ class State():
             bool: Terminal state value
         """
 
-        return self.state_controller.get_current_agent().get_goal_collected()
+        agent_pos = self.get_state_controller().get_current_agent_position()
+        goal = self.get_state_controller().get_map_copy().get_goal()
+
+        return agent_pos == goal

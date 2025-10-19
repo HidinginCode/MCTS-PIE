@@ -90,7 +90,7 @@ class Controller():
         Args:
             new_pos (tuple): New position of the agent (x,y)
         """
-        self.current_agent_position = deepcopy(new_pos)
+        self.current_agent_position = new_pos
 
     def is_valid_position(self, pos:tuple) -> bool:
         """Checks if a position is inside of the map boundaries.
