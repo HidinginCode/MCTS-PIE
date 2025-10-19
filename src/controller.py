@@ -2,6 +2,7 @@
 This controller is used to simulate the agents movements on the map, 
 perform the shifts and update the map accordingly."""
 
+from __future__ import annotations
 from copy import deepcopy
 from map import Map
 from agent import Agent
@@ -19,7 +20,7 @@ class Controller():
             map_copy (Map): Map that will be used.
             current_agent (Agent): Agent that is to be simulated.
         """
-        self.map_copy = deepcopy(map_copy)
+        self.map_copy = map_copy.clone()
         self.current_agent = deepcopy(current_agent)
         self.identificator = id(self)
         self.current_agent_position = start_pos
@@ -35,6 +36,19 @@ class Controller():
             f"Agent identifier: {self.current_agent.get_idenificator()}"
             f"Current agent position: {self.current_agent_position}"
         )
+
+    def clone(self) -> Controller:
+        """Clones a controller without using deepcopy.
+
+        Returns:
+            Controller: Cloned controller
+        """
+        new_controller = Controller.__new__(Controller)
+        new_controller.map_copy = self.map_copy.clone()
+        new_controller.current_agent = deepcopy(self.current_agent)
+        new_controller.current_agent_position = tuple(self.current_agent_position)
+        new_controller.identificator = id(new_controller)
+        return new_controller
 
     def get_map_copy(self) -> Map:
         """Returns current map.

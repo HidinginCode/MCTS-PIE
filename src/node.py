@@ -34,6 +34,25 @@ class Node():
         """String method for the node class."""
         return f"Visits: {self.visits}\nValues: {self.values}\nID: {self.identificator}"
 
+    def clone(self) -> Node:
+        """This method creates a clone of a node without deepcopy
+
+        Returns:
+            Node: Cloned node
+        """
+
+        new_node = Node.__new__(Node) # This skips the init
+        new_node.depth = self.depth
+        new_node.state = self.state.clone()
+        new_node.parent = self.parent
+        new_node.children = self.children
+        new_node.identificator = id(new_node)
+        new_node.visits = self.visits
+        new_node.values = self.values.copy()
+        new_node.ucb_vector = {}
+        new_node.front = []
+        return new_node
+
     def get_depth(self) -> int:
         """Returns the depth of a node.
 
