@@ -28,7 +28,7 @@ class Node():
             "weight_shifted": 0.0,
             "distance_to_goal": 0,
         }
-        self.ucb_vector = {}
+        self.ucb_vector = []
         self.front = []
 
     def __str__(self):
@@ -142,6 +142,22 @@ class Node():
         """
 
         return self.identificator
+
+    def get_ucb_vector(self) -> dict:
+        """Returns the UCB1 vector of a node.
+
+        Returns:
+            list: UCB1 vector
+        """
+        return self.ucb_vector
+
+    def set_ucb_vector(self, ucb_vec: dict) -> None:
+        """Sets the UCB Vector for a node.
+
+        Args:
+            ucb_vec (list): New UCB vector
+        """
+        self.ucb_vector = ucb_vec.copy()
 
     def get_visits(self) -> int:
         """Returns the number of times the node was visited.
@@ -287,6 +303,21 @@ class Node():
             any(node_values[key] < self.values[key] for key in node_values.keys())
         )
 
+    def is_ucb_dominated(self, node: Node) -> bool:
+        """Determined if current node is UCB1 dominated by the speicified one.
+
+        Args:
+            node (Node): Node to be checked for domination.
+
+        Returns:
+            bool: Is dominated or not
+        """
+        node_ucb_vec = node.get_ucb_vector()
+        return(
+            all(node_ucb_vec[key] <= self.ucb_vector[key] for key in node_ucb_vec.keys()) and
+            any(node_ucb_vec[key] < self.ucb_vector[key] for key in node_ucb_vec.keys())
+        )
+
     def determine_pareto_front(self) -> list:
         """Determines the pareto front, based on childrens metrics.
 
@@ -338,6 +369,36 @@ class Node():
                     continue
 
                 if child1.is_dominated(child2):
+                    dominated = True
+                    break
+
+            if not dominated:
+                non_dominated_nodes.append(child1)
+
+        return non_dominated_nodes
+
+    @staticmethod
+    def determine_pareto_from_ucb(all_nodes: list[Node]) -> list[Node]:
+        """Determine pareto front from UCB1 vector of nodes in list.
+
+        Args:
+            all_nodes (list[Node]): Nodes to determine front from
+
+        Returns:
+            list[Node]: Pareto front
+        """
+        non_dominated_nodes = []
+
+        # Then we remove them when they are domianted
+        for child1 in all_nodes:
+            # Domination flag
+            dominated = False
+
+            for child2 in all_nodes:
+                if child1 is child2:
+                    continue
+
+                if child1.is_ucb_dominated(child2):
                     dominated = True
                     break
 

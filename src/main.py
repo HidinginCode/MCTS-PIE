@@ -12,7 +12,7 @@ from controller import Controller
 def main():
     """ Main method that runs all components togehter"""
 
-    test_map = Map(map_dim=5, goal=(4,4))
+    test_map = Map(map_dim=10, goal=(9,9))
     agent = Agent()
     controller = Controller(map_copy=test_map, current_agent=agent)
 
@@ -22,7 +22,7 @@ def main():
     tree = McTree(root=root_node)
 
     print("Starting MCTS ...")
-    tree.run_search(20000)
+    tree.run_search(10000)
 #     visualize_tree_hierarchical(root_node, max_depth=10, show_metrics=False, save_to_file=True)
 
 
