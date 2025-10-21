@@ -1,13 +1,8 @@
 """This module contains the class that creates and simulates the MCTS tree."""
 
-import math
-from copy import deepcopy
-import logging
 import random
-#from multiprocessing import Pool
+import multiprocessing as mp
 import os
-import time
-import pickle
 import numpy as np
 
 from tqdm import tqdm
@@ -16,14 +11,7 @@ from node import Node
 class McTree():
     """This class represents the MCTS tree."""
 
-    # Configure the global logging behavior once
-    logging.basicConfig(
-        level=logging.INFO,  # or DEBUG for more verbosity
-        format="%(asctime)s [%(levelname)s] %(message)s",
-        handlers=[
-            logging.StreamHandler()
-        ]
-    )
+    SHARED_NODE = None
 
     def __init__(self, root: Node):
         """Init method for McTree.
@@ -35,6 +23,7 @@ class McTree():
         self.root = root
         self.max_depth = None
         self.identificator = id(self)
+        mp.set_start_method("fork", force=True)
 
     def get_root(self) -> Node:
         """Returns root node of the tree.
@@ -107,7 +96,7 @@ class McTree():
         # Check if front is available
         if len(node.get_front()) == 0:
             node.set_front(node.determine_pareto_front())
-
+#from multiprocessing import Pool
         if len(node.get_front()) == 0:
             print(f"Number of children: {len(node.get_children())}")
             input()
@@ -140,15 +129,17 @@ class McTree():
         for child in children:
             child: Node
             child_values = child.get_values()
-            D = len(child_values) # Number of dimensions
+            dimensions = len(child_values) # Number of dimensions
             child_visits = child.get_visits()
             parent_visits = node.get_visits()
             exploration_term = np.sqrt(
-                (2*np.log(parent_visits*np.sqrt(np.sqrt(D*number_of_children))))/child_visits
-            )
+                (2*np.log(
+                    parent_visits*np.sqrt(np.sqrt(dimensions*number_of_children)))
+                )/child_visits
+            )#from multiprocessing import Pool
             ucb_vec = {k: v + exploration_term for k, v in child_values.items()}
             child.set_ucb_vector(ucb_vec)
-        
+
         pareto_front = Node.determine_pareto_from_ucb(children)
         return random.choice(pareto_front)
 
@@ -185,17 +176,15 @@ class McTree():
             maximum_moves (int): Maximum number of moves per simulation
         """
 
-        # Pre pickle leaf to avoid overhead
-        # pickled_leaf = pickle.dumps(leaf)
+        McTree.SHARED_NODE = leaf
 
-        # if not leaf.get_state().get_terminal_state():
-        #     # Obtain list of nodes from multiprocessing
-        #     results = self.mult_pool.map(
-        #         self.multiprocess_leaf_simulation,
-        #         [(pickled_leaf, maximum_moves)] * number_of_simulations
-        #     )
-
-        results = self.iterative_leaf_simulation(leaf, number_of_simulations, maximum_moves)
+        with mp.Pool(
+            processes = min(os.cpu_count(), number_of_simulations),
+        ) as pool:
+            results = pool.map(
+                McTree.multiprocess_leaf_simulation,
+                [maximum_moves for _ in range(number_of_simulations)]
+            )
 
         if results:
             non_dominated_results = leaf.determine_pareto_from_list(results)
@@ -231,7 +220,7 @@ class McTree():
         return solutions
 
     @staticmethod
-    def multiprocess_leaf_simulation(args: tuple[Node, int]) -> Node:
+    def multiprocess_leaf_simulation(maximum_moves: int) -> Node:
         """Multiprocessing wrapper for leaf simulation.
 
         Args:
@@ -240,16 +229,7 @@ class McTree():
         Returns:
             Node: Copy of node after simulations
         """
-        # Get random state for all workers
-        random.seed(os.getpid() + time.time_ns())
-
-
-        pickled_leaf, maximum_moves = args
-
-        leaf = pickle.loads(pickled_leaf)
-
-        # Copy leaf for independent states
-        leaf_copy = deepcopy(leaf)
+        leaf_copy = Node(McTree.SHARED_NODE.get_state().clone(), None)
         copy_controller = leaf_copy.get_state().get_state_controller()
 
         for _ in range (maximum_moves):
@@ -305,9 +285,10 @@ class McTree():
                 pos = leaf.get_state().get_state_controller().get_current_agent_position()
 
                 if goal == pos and leaf not in solutions:
-                    print(f"Found new solution at depth {leaf.get_depth()}")
                     solutions.append(leaf)
-                self.simulate_leaf(leaf, 5, 1000)
+
+
+                self.simulate_leaf(leaf, 16, 100)
                 new_child = self.expand(leaf)
                 self.backpropagate(new_child)
 

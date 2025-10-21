@@ -1,5 +1,6 @@
 """This module holds the agent class, which collects metrics for the experiments."""
 
+from __future__ import annotations
 from copy import deepcopy
 
 class Agent():
@@ -28,6 +29,22 @@ class Agent():
             f"Energy Consumption: {self.energy_consumption}\n"
             f"Identificator: {self.identificator}"
         )
+
+    def clone(self) -> Agent:
+        """Clone function for agent to avoid deepcopy.
+
+        Returns:
+            Agent: Cloned agent
+        """
+        clone = Agent()
+        clone.identificator = id(clone)
+        clone.energy_consumption = self.energy_consumption
+        clone.step_count = self.step_count
+        clone.path = list(self.path)
+        clone.weight_shifted = self.weight_shifted
+        clone.amount_of_shifts = self.amount_of_shifts
+        clone.goal_collected = self.goal_collected
+        return clone
 
     def get_step_count(self) -> int:
         """Returns an agents step count.
