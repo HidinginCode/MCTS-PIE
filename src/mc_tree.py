@@ -1,5 +1,6 @@
 """This module contains the class that creates and simulates the MCTS tree."""
 
+import sys
 import random
 import multiprocessing as mp
 import os
@@ -181,10 +182,11 @@ class McTree():
         with mp.Pool(
             processes = min(os.cpu_count(), number_of_simulations),
         ) as pool:
-            results = pool.map(
-                McTree.multiprocess_leaf_simulation,
-                [maximum_moves for _ in range(number_of_simulations)]
+            it = pool.imap_unordered(
+                McTree.multiprocess_heavy_distance_rollout,
+                [maximum_moves] * number_of_simulations,
             )
+            results = list(it)
 
         if results:
             non_dominated_results = leaf.determine_pareto_from_list(results)
@@ -220,11 +222,11 @@ class McTree():
         return solutions
 
     @staticmethod
-    def multiprocess_leaf_simulation(maximum_moves: int) -> Node:
-        """Multiprocessing wrapper for leaf simulation.
+    def multiprocess_light_rollout(maximum_moves: int) -> Node:
+        """Multiprocessing light rollout for leaf simulation.
 
         Args:
-            args (any): Simulation Args
+            maxmimum_moves(int): Maximum number of moves untill break.
 
         Returns:
             Node: Copy of node after simulations
@@ -242,6 +244,51 @@ class McTree():
             move_direction, shift_direction= random.choice(valid_moves)
             copy_controller.move_agent(move_direction, shift_direction)
 
+        return leaf_copy
+
+    @staticmethod
+    def multiprocess_heavy_distance_rollout(maxmimum_moves: int) -> Node:
+        """Heavy rollout for leaf simulation.
+        Moves are selected by either decreasing or staying at the same distance to the goal.
+
+        Args:
+            maximum_moves (int): Number of maximum moves till break
+
+        Returns:
+            Node: Simulated node
+        """
+
+        leaf_copy = Node(McTree.SHARED_NODE.get_state().clone(), None)
+        copy_controller = leaf_copy.get_state().state_controller
+        goal = copy_controller.get_map_copy().goal
+
+        for _ in range(maxmimum_moves):
+            # Break if we reached terminal state
+            if leaf_copy.get_state().get_terminal_state():
+                break
+
+            # Get needed parts of calculation and prepare move list
+            current_distance_to_goal = copy_controller.calculate_distance_to_goal()
+            current_position = copy_controller.current_agent_position
+            distance_minimizing_moves = []
+            valid_moves = leaf_copy.get_all_valid_actions()
+
+            # Get moves that do not increase distance
+            for move in valid_moves:
+                # [0,1] [2,3] -> [[0,2], [1,3]] -> [2, 4]
+                new_pos = tuple(sum(coord) for coord in zip(current_position, move[0].value))
+                #print(f"New Pos: {new_pos}, Current Pos: {current_position}")
+                new_distance_to_goal = sum(abs(a - b) for a, b in zip(new_pos, goal))
+                if new_distance_to_goal <= current_distance_to_goal:
+                    distance_minimizing_moves.append(move)
+
+            # Randomly chose from moves
+            #print(len(distance_minimizing_moves))
+            random_number = np.random.randint(0, len(distance_minimizing_moves))
+            random_number: int
+            move_direction, shift_direction= distance_minimizing_moves[random_number]
+            copy_controller.move_agent(move_direction, shift_direction)
+            del(distance_minimizing_moves)
         return leaf_copy
 
     def backpropagate(self, node: Node) -> None:
@@ -278,6 +325,7 @@ class McTree():
         solutions = []
 
         for _ in tqdm(range(iterations)):
+
             leaf = self.select_node(self.root)
 
             if leaf is not None:
@@ -288,7 +336,7 @@ class McTree():
                     solutions.append(leaf)
 
 
-                self.simulate_leaf(leaf, 16, 100)
+                self.simulate_leaf(leaf, 8, 100)
                 new_child = self.expand(leaf)
                 self.backpropagate(new_child)
 

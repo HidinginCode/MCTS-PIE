@@ -1,7 +1,6 @@
 """This module holds the agent class, which collects metrics for the experiments."""
 
 from __future__ import annotations
-from copy import deepcopy
 
 class Agent():
     """This class represents the agent and collects metrics for the experiments.
@@ -134,7 +133,7 @@ class Agent():
         Args:
             path (list): New path for agent
         """
-        self.path = deepcopy(path)
+        self.path = path
 
     def get_weight_shifted(self) -> float:
         """Returns the amount of weight shifted by the agent.

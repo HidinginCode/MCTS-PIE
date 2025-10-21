@@ -1,7 +1,6 @@
 """This module represents a the node class for the MCTS tree."""
 
 from __future__ import annotations
-from copy import deepcopy
 from directions import Direction
 from state import State
 
@@ -17,7 +16,7 @@ class Node():
         """
 
         self.depth = parent.depth + 1 if parent else 0
-        self.state = deepcopy(state)
+        self.state = state.clone()
         self.parent_actions = None
         self.parent = parent
         self.children = {}
