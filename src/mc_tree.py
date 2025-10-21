@@ -1,5 +1,6 @@
 """This module contains the class that creates and simulates the MCTS tree."""
 
+import math
 from copy import deepcopy
 import logging
 import random
@@ -7,6 +8,7 @@ import random
 import os
 import time
 import pickle
+import numpy as np
 
 from tqdm import tqdm
 from node import Node
@@ -89,7 +91,7 @@ class McTree():
         if root.get_state().get_terminal_state():
             return None
 
-        selected_node = self.select_node(self.child_selection(root))
+        selected_node = self.select_node(self.ucb_child_selection(root))
         return selected_node
 
     def child_selection(self, node: Node) -> Node:
@@ -122,6 +124,33 @@ class McTree():
 
         return random.choices(front, probabilities, k=1)[0]
         #return random.choice(front)
+
+    def ucb_child_selection(self, node: Node) -> Node:
+        """Selects children based on pareto dominance of UCB1-Calculations
+
+        Args:
+            node (Node): Node of which children are selected
+
+        Returns:
+            Node: Child node
+        """
+        children = node.get_children().values()
+        number_of_children = len(children)
+
+        for child in children:
+            child: Node
+            child_values = child.get_values()
+            D = len(child_values) # Number of dimensions
+            child_visits = child.get_visits()
+            parent_visits = node.get_visits()
+            exploration_term = np.sqrt(
+                (2*np.log(parent_visits*np.sqrt(np.sqrt(D*number_of_children))))/child_visits
+            )
+            ucb_vec = {k: v + exploration_term for k, v in child_values.items()}
+            child.set_ucb_vector(ucb_vec)
+        
+        pareto_front = Node.determine_pareto_from_ucb(children)
+        return random.choice(pareto_front)
 
     def expand(self, node: Node) -> Node:
         """Creates a child for a given node.
@@ -278,7 +307,7 @@ class McTree():
                 if goal == pos and leaf not in solutions:
                     print(f"Found new solution at depth {leaf.get_depth()}")
                     solutions.append(leaf)
-                self.simulate_leaf(leaf, 2, 500)
+                self.simulate_leaf(leaf, 5, 1000)
                 new_child = self.expand(leaf)
                 self.backpropagate(new_child)
 
