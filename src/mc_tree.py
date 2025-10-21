@@ -288,7 +288,6 @@ class McTree():
             random_number: int
             move_direction, shift_direction= distance_minimizing_moves[random_number]
             copy_controller.move_agent(move_direction, shift_direction)
-            del(distance_minimizing_moves)
         return leaf_copy
 
     def backpropagate(self, node: Node) -> None:
@@ -336,7 +335,7 @@ class McTree():
                     solutions.append(leaf)
 
 
-                self.simulate_leaf(leaf, 8, 100)
+                self.simulate_leaf(leaf, 16, 200)
                 new_child = self.expand(leaf)
                 self.backpropagate(new_child)
 
