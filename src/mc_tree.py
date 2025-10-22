@@ -182,7 +182,7 @@ class McTree():
             processes = min(os.cpu_count(), number_of_simulations),
         ) as pool:
             it = pool.imap_unordered(
-                McTree.multiprocess_heavy_distance_rollout,
+                McTree.multiprocess_light_rollout,
                 [maximum_moves] * number_of_simulations,
             )
             results = list(it)
@@ -230,8 +230,8 @@ class McTree():
         Returns:
             Node: Copy of node after simulations
         """
-        leaf_copy = Node(McTree.SHARED_NODE.get_state().clone(), None)
-        copy_controller = leaf_copy.get_state().get_state_controller()
+        leaf_copy = Node(McTree.SHARED_NODE.state.clone(), None)
+        copy_controller = leaf_copy.state.state_controller
 
         for _ in range (maximum_moves):
 
