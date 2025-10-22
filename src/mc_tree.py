@@ -1,6 +1,5 @@
 """This module contains the class that creates and simulates the MCTS tree."""
 
-import sys
 import random
 import multiprocessing as mp
 import os
@@ -183,7 +182,7 @@ class McTree():
             processes = min(os.cpu_count(), number_of_simulations),
         ) as pool:
             it = pool.imap_unordered(
-                McTree.multiprocess_heavy_minweight_rollout,
+                McTree.multiprocess_heavy_distance_rollout,
                 [maximum_moves] * number_of_simulations,
             )
             results = list(it)
@@ -261,32 +260,29 @@ class McTree():
         leaf_copy = Node(McTree.SHARED_NODE.state.clone(), None)
         copy_controller = leaf_copy.state.state_controller
         goal = copy_controller.map_copy.goal
+        manhattan = lambda p, q: abs(p[0]-q[0]) + abs(p[1]-q[1])
 
         for _ in range(maximum_moves):
             # Break if we reached terminal state
             if leaf_copy.get_state().get_terminal_state():
                 break
 
+            agent_pos = copy_controller.current_agent_position
             # Get needed parts of calculation and prepare move list
-            current_distance_to_goal = copy_controller.calculate_distance_to_goal()
-            current_position = copy_controller.current_agent_position
+            current_distance_to_goal = manhattan(agent_pos, goal)
             distance_minimizing_moves = []
             valid_moves = leaf_copy.get_all_valid_actions()
 
             # Get moves that do not increase distance
-            for move in valid_moves:
-                # [0,1] [2,3] -> [[0,2], [1,3]] -> [2, 4]
-                new_pos = tuple(sum(coord) for coord in zip(current_position, move[0].value))
-                #print(f"New Pos: {new_pos}, Current Pos: {current_position}")
-                new_distance_to_goal = sum(abs(a - b) for a, b in zip(new_pos, goal))
+            for move_dir, shifting_dir in valid_moves:
+                new_pos = (agent_pos[0] + move_dir.value[0],
+                           agent_pos[1] + move_dir.value[1])
+                new_distance_to_goal = manhattan(new_pos, goal)
                 if new_distance_to_goal <= current_distance_to_goal:
-                    distance_minimizing_moves.append(move)
+                    distance_minimizing_moves.append((move_dir, shifting_dir))
 
             # Randomly chose from moves
-            #print(len(distance_minimizing_moves))
-            random_number = np.random.randint(0, len(distance_minimizing_moves))
-            random_number: int
-            move_direction, shift_direction= distance_minimizing_moves[random_number]
+            move_direction, shift_direction = random.choice(distance_minimizing_moves)
             copy_controller.move_agent(move_direction, shift_direction)
         return leaf_copy
 
