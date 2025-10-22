@@ -122,6 +122,7 @@ class McTree():
 
         Returns:
             Node: Child node
+        TODO: Figure out other selection than random choice (Hypervolume, Crowding-Distance,...)
         """
         children = node.get_children().values()
         number_of_children = len(children)
@@ -445,12 +446,13 @@ class McTree():
                 goal = leaf.get_state().get_state_controller().get_map_copy().get_goal()
                 pos = leaf.get_state().get_state_controller().get_current_agent_position()
 
-                if goal == pos and leaf not in solutions:
-                    solutions.append(leaf)
+                if goal == pos: 
+                    if leaf not in solutions:
+                        solutions.append(leaf)
+                    continue
 
-
-                self.simulate_leaf(leaf, 16, 200)
                 new_child = self.expand(leaf)
+                self.simulate_leaf(new_child, 16, 200)
                 self.backpropagate(new_child)
 
         solutions = Node.determine_pareto_from_list(solutions)
