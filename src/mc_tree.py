@@ -183,7 +183,7 @@ class McTree():
             processes = min(os.cpu_count(), number_of_simulations),
         ) as pool:
             it = pool.imap_unordered(
-                McTree.multiprocess_heavy_pareto_rollout,
+                McTree.multiprocess_heavy_minweight_rollout,
                 [maximum_moves] * number_of_simulations,
             )
             results = list(it)
@@ -247,7 +247,7 @@ class McTree():
         return leaf_copy
 
     @staticmethod
-    def multiprocess_heavy_distance_rollout(maxmimum_moves: int) -> Node:
+    def multiprocess_heavy_distance_rollout(maximum_moves: int) -> Node:
         """Heavy rollout for leaf simulation.
         Moves are selected by either decreasing or staying at the same distance to the goal.
 
@@ -262,7 +262,7 @@ class McTree():
         copy_controller = leaf_copy.state.state_controller
         goal = copy_controller.map_copy.goal
 
-        for _ in range(maxmimum_moves):
+        for _ in range(maximum_moves):
             # Break if we reached terminal state
             if leaf_copy.get_state().get_terminal_state():
                 break
@@ -364,6 +364,48 @@ class McTree():
 
             move_dir, shift_dir = random.choice(front)[3]
             copy_controller.move_agent(move_dir, shift_dir)
+        return leaf_copy
+
+    @staticmethod
+    def multiprocess_heavy_minweight_rollout(maximum_moves: int) -> Node:
+        """Heavy rollout method that picks the lowest weight from the neighborhood to move to and shift.
+        The only viable moves for this are those that minimize distance to goal.
+
+        Args:
+            maximum_moves (int): Maximum number of moves before break
+
+        Returns:
+            Node: Simulated node
+        """
+        leaf_copy = Node(McTree.SHARED_NODE.state.clone(), None)
+        copy_controller = leaf_copy.state.state_controller
+        manhattan = lambda p, q: abs(p[0]-q[0]) + abs(p[1]-q[1])
+        map_list = copy_controller.map_copy.map
+        goal = copy_controller.map_copy.goal
+
+        for _ in range(maximum_moves):
+            # Break if we reached terminal state
+            if leaf_copy.get_state().get_terminal_state():
+                break
+
+            # Get needed parts of calculation and prepare move list
+            current_position = copy_controller.current_agent_position
+            current_distance_to_goal = manhattan(current_position, goal)
+            valid_moves = leaf_copy.get_all_valid_actions()
+            smallest_weight = np.inf # Large number to be set later
+            selected_move = None
+
+            # Get moves that do not increase distance
+            for move_dir, shift_dir in valid_moves:
+                new_pos = (current_position[0] + move_dir.value[0],
+                            current_position[1] + move_dir.value[1])
+                #print(f"New Pos: {new_pos}, Current Pos: {current_position}")
+                new_distance_to_goal = manhattan(new_pos, goal)
+                if new_distance_to_goal <= current_distance_to_goal:
+                    if map_list[new_pos[0]][new_pos[1]] < smallest_weight:
+                        selected_move = (move_dir, shift_dir)
+
+            copy_controller.move_agent(selected_move[0], selected_move[1])
         return leaf_copy
 
     def backpropagate(self, node: Node) -> None:
