@@ -97,7 +97,7 @@ class McTree():
         # Check if front is available
         if len(node.get_front()) == 0:
             node.set_front(node.determine_pareto_front())
-#from multiprocessing import Pool
+
         if len(node.get_front()) == 0:
             print(f"Number of children: {len(node.get_children())}")
             input()
@@ -183,7 +183,7 @@ class McTree():
             processes = min(os.cpu_count(), number_of_simulations),
         ) as pool:
             it = pool.imap_unordered(
-                McTree.multiprocess_heavy_distance_rollout,
+                McTree.multiprocess_heavy_pareto_rollout,
                 [maximum_moves] * number_of_simulations,
             )
             results = list(it)
@@ -258,9 +258,9 @@ class McTree():
             Node: Simulated node
         """
 
-        leaf_copy = Node(McTree.SHARED_NODE.get_state().clone(), None)
-        copy_controller = leaf_copy.get_state().state_controller
-        goal = copy_controller.get_map_copy().goal
+        leaf_copy = Node(McTree.SHARED_NODE.state.clone(), None)
+        copy_controller = leaf_copy.state.state_controller
+        goal = copy_controller.map_copy.goal
 
         for _ in range(maxmimum_moves):
             # Break if we reached terminal state
@@ -288,6 +288,82 @@ class McTree():
             random_number: int
             move_direction, shift_direction= distance_minimizing_moves[random_number]
             copy_controller.move_agent(move_direction, shift_direction)
+        return leaf_copy
+
+    @staticmethod
+    def multiprocess_heavy_pareto_rollout(maximum_moves: int) -> Node:
+        """Heavy rollout that uses pareto dominance to select the next move.
+
+        Args:
+            maximum_moves (int): Maximum number of tested moves
+
+        Returns:
+            Node: Node to simulate
+        """
+
+        def dominates(tuple1: tuple, tuple2: tuple) -> bool:
+            """Determines if move 1 is dominates the other
+
+            Args:
+                tuple1 (tuple): Move to be checked if dominates
+                tuple2 (tuple): Move to be checked if dominated
+
+            Returns:
+                bool: Domination status
+            """
+            return(
+                (tuple1[0] <= tuple2[0] and tuple1[1] <= tuple2[1] and tuple1[2] <= tuple2[2]) and
+                (tuple1[0] < tuple2[0] or tuple1[1] < tuple2[1] or tuple1[2] < tuple2[2])
+            )
+
+        
+        leaf_copy = Node(McTree.SHARED_NODE.state.clone(), None)
+        copy_controller = leaf_copy.state.state_controller
+        manhattan = lambda p, q: abs(p[0]-q[0]) + abs(p[1]-q[1]) # Fancy lambda expression to calculate manhattan distance
+        map_list = copy_controller.map_copy.map
+        agent = copy_controller.current_agent
+        goal = copy_controller.map_copy.goal
+
+        for _ in range(maximum_moves):
+            if leaf_copy.get_state().get_terminal_state():
+                break
+
+            valid_moves = leaf_copy.get_all_valid_actions()
+            current_pos = copy_controller.current_agent_position
+            front: list[tuple] = []
+
+            for move_dir, shift_dir in valid_moves:
+                new_pos = (current_pos[0] + move_dir.value[0],
+                        current_pos[1] + move_dir.value[1])
+
+                obstacle_weight = map_list[new_pos[0]][new_pos[1]]
+                candidate = (
+                    agent.step_count + 1,
+                    manhattan(new_pos, goal),
+                    agent.weight_shifted + obstacle_weight,
+                    (move_dir, shift_dir),
+                )
+
+                # Check if candidate is dominated by any member of the front
+                dominated = False
+                for f in front:
+                    if dominates(f, candidate):
+                        dominated = True
+                        break
+                if dominated:
+                    continue
+
+                # Remove members of the front that are dominated by the candidate
+                i = 0
+                while i < len(front):
+                    if dominates(candidate, front[i]):
+                        front.pop(i)
+                    else:
+                        i += 1
+                front.append(candidate)
+
+            move_dir, shift_dir = random.choice(front)[3]
+            copy_controller.move_agent(move_dir, shift_dir)
         return leaf_copy
 
     def backpropagate(self, node: Node) -> None:
