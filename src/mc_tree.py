@@ -8,6 +8,7 @@ import numpy as np
 
 from tqdm import tqdm
 from node import Node
+from controller import Controller
 
 class McTree():
     """This class represents the MCTS tree."""
@@ -193,7 +194,7 @@ class McTree():
             processes = min(os.cpu_count(), number_of_simulations),
         ) as pool:
             it = pool.imap_unordered(
-                McTree.multiprocess_light_rollout,
+                McTree.multiprocess_heavy_distance_rollout,
                 [maximum_moves] * number_of_simulations,
             )
             results = list(it)
@@ -280,7 +281,7 @@ class McTree():
 
             agent_pos = copy_controller.current_agent_position
             # Get needed parts of calculation and prepare move list
-            current_distance_to_goal = manhattan(agent_pos, goal)
+            current_distance_to_goal = copy_controller.calculate_distance_to_goal()
             distance_minimizing_moves = []
             valid_moves = leaf_copy.get_all_valid_actions()
 
@@ -288,7 +289,7 @@ class McTree():
             for move_dir, shifting_dir in valid_moves:
                 new_pos = (agent_pos[0] + move_dir.value[0],
                            agent_pos[1] + move_dir.value[1])
-                new_distance_to_goal = manhattan(new_pos, goal)
+                new_distance_to_goal = Controller.remaining_roundtrip_distance(new_pos, copy_controller.start_pos, copy_controller.map_copy.goal, copy_controller.goal_collected)
                 if new_distance_to_goal <= current_distance_to_goal:
                     distance_minimizing_moves.append((move_dir, shifting_dir))
 
@@ -453,10 +454,8 @@ class McTree():
             leaf = self.select_node(self.root)
 
             if leaf is not None:
-                goal = leaf.get_state().get_state_controller().get_map_copy().get_goal()
-                pos = leaf.get_state().get_state_controller().get_current_agent_position()
 
-                if goal == pos: 
+                if leaf.state.get_terminal_state(): 
                     if leaf not in solutions:
                         solutions.append(leaf)
                     continue

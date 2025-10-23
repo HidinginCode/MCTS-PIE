@@ -22,7 +22,9 @@ class Controller():
         self.map_copy = map_copy.clone()
         self.current_agent = current_agent.clone()
         self.identificator = id(self)
-        self.current_agent_position = start_pos
+        self.current_agent_position = tuple(start_pos)
+        self.goal_collected = False
+        self.start_pos = tuple(start_pos)
 
     def __str__(self) -> str:
         """String method for the controller.
@@ -47,6 +49,8 @@ class Controller():
         new_controller.current_agent = self.current_agent.clone()
         new_controller.current_agent_position = tuple(self.current_agent_position)
         new_controller.identificator = id(new_controller)
+        new_controller.goal_collected = self.goal_collected
+        new_controller.start_pos = tuple(self.start_pos)
         return new_controller
 
     def get_map_copy(self) -> Map:
@@ -155,10 +159,7 @@ class Controller():
             float: Distance to goal
         """
 
-        goal = self.map_copy.get_goal()
-        position = self.current_agent_position
-
-        return sum(abs(a - b) for a, b in zip(position, goal))
+        return Controller.remaining_roundtrip_distance(self.current_agent_position, self.start_pos, self.map_copy.goal, self.goal_collected)
 
     def move_agent(self, move_direction: Direction, shifting_direction: Direction) -> bool:
         """Moves the agent and facilitates map changes.
@@ -199,6 +200,32 @@ class Controller():
         self.current_agent.increase_step_count()
 
         if new_pos == self.map_copy.get_goal():
-            self.current_agent.set_goal_collected(True)
+            self.goal_collected = True
 
         return True
+
+    @staticmethod
+    def remaining_roundtrip_distance(
+        current: tuple,
+        start: tuple,
+        goal: tuple,
+        goal_reached: bool
+    ) -> int:
+        """
+        Remaining Manhattan distance for the roundtrip current -> goal -> start,
+        switching to 'current -> start' once the goal has been collected.
+
+        Args:
+            current: current agent position
+            start:   starting position
+            goal:    goal position
+            goal_reached: True if the agent has already collected/reached the goal
+
+        Returns:
+            Remaining Manhattan distance under the grid metric (no obstacles).
+        """
+        manhattan = lambda p, q: abs(p[0]-q[0]) + abs(p[1]-q[1])
+        if goal_reached:
+            return manhattan(current, start)
+        else:
+            return manhattan(current, goal) + manhattan(goal, start)

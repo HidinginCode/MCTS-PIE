@@ -13,7 +13,7 @@ from controller import Controller
 def main():
     """ Main method that runs all components togehter"""
 
-    test_map = Map(map_dim=7, goal=(6,6))
+    test_map = Map(map_dim=4, goal=(3,3))
     agent = Agent()
     controller = Controller(map_copy=test_map, current_agent=agent)
 
@@ -23,8 +23,8 @@ def main():
     tree = McTree(root=root_node)
 
     print("Starting MCTS ...")
-    tree.run_search(10000)
-    visualize_tree(tree.get_root(), filename="mcts_tree.svg", max_depth=None)
+    tree.run_search(2000)
+#    visualize_tree(tree.get_root(), filename="mcts_tree.svg", max_depth=None)
 
 
 def visualize_tree(root, filename: str = "mcts_tree.svg", max_depth: int | None = None) -> None:

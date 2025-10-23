@@ -78,7 +78,10 @@ class State():
             bool: Terminal state value
         """
 
-        agent_pos = self.get_state_controller().get_current_agent_position()
-        goal = self.get_state_controller().get_map_copy().get_goal()
+        goal = self.state_controller.map_copy.goal
+        current_pos = self.state_controller.current_agent_position
+        start = self.state_controller.start_pos
+        goal_reached = self.state_controller.goal_collected
+        distance = Controller.remaining_roundtrip_distance(current_pos, start, goal, goal_reached)
 
-        return agent_pos == goal
+        return distance == 0
