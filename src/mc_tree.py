@@ -1,5 +1,6 @@
 """This module contains the class that creates and simulates the MCTS tree."""
 
+import math
 import random
 import multiprocessing as mp
 import os
@@ -114,6 +115,14 @@ class McTree():
         return random.choices(front, probabilities, k=1)[0]
         #return random.choice(front)
 
+    @staticmethod
+    def normalize_unit_vector(values: dict[str, float]) -> dict[str, float]:
+        """Normalize a dict of numeric values to a unit vector (L2 norm = 1)."""
+        norm = math.sqrt(sum(v ** 2 for v in values.values()))
+        if norm == 0:
+            return {k: 0.0 for k in values}  # avoid division by zero
+        return {k: v / norm for k, v in values.items()}
+
     def ucb_child_selection(self, node: Node) -> Node:
         """Selects children based on pareto dominance of UCB1-Calculations
 
@@ -133,12 +142,13 @@ class McTree():
             dimensions = len(child_values) # Number of dimensions
             child_visits = child.get_visits()
             parent_visits = node.get_visits()
+            normalized_values = McTree.normalize_unit_vector(child.get_values())
             exploration_term = np.sqrt(
                 (2*np.log(
                     parent_visits*np.sqrt(np.sqrt(dimensions*number_of_children)))
                 )/child_visits
             )#from multiprocessing import Pool
-            ucb_vec = {k: v + exploration_term for k, v in child_values.items()}
+            ucb_vec = {k: v + exploration_term for k, v in normalized_values.items()}
             child.set_ucb_vector(ucb_vec)
 
         pareto_front = Node.determine_pareto_from_ucb(children)
