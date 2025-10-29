@@ -1,204 +1,225 @@
-"""This module contains the controller for the project.
-This controller is used to simulate the agents movements on the map, 
-perform the shifts and update the map accordingly."""
+"""This module contains the controller class which facilitates movement and obstacle changes for an agent on the map."""
 
 from __future__ import annotations
-from map import Map
-from agent import Agent
+from environment import Environment
 from directions import Direction
 
 class Controller():
-    """Controller class, that simulates agent on the map
-    and updates map accordingly.
-    """
+    """Controller class which facilitates map changes and agent movement."""
 
-    def __init__(self, map_copy: Map, current_agent: Agent, start_pos: tuple = (0,0)):
+    def __init__(self, environment: Environment, start_pos: tuple = (0,0)):
         """Init method for the controller class.
 
         Args:
-            map_copy (Map): Map that will be used.
-            current_agent (Agent): Agent that is to be simulated.
+            environment (Environment): Environment changed by the controller
+            start_pos (tuple, optional): Starting position. Defaults to (0,0).
         """
-        self.map_copy = map_copy.clone()
-        self.current_agent = current_agent.clone()
-        self.identificator = id(self)
-        self.current_agent_position = start_pos
-
-    def __str__(self) -> str:
-        """String method for the controller.
-
-        Returns:
-            str: String that holds `identifier` and `agent identifier`
-        """
-        return (
-            f"Map identifier: {self.identificator}\n"
-            f"Agent identifier: {self.current_agent.get_idenificator()}"
-            f"Current agent position: {self.current_agent_position}"
-        )
+        self._identifier = id(self)
+        self._environment = environment.clone()
+        self._start_pos = tuple(start_pos)
+        self._current_pos = tuple(start_pos)
+        self._step_count = 0
+        self._weight_shifted = 0.0
+        self._distance_to_goal = self.calulate_distance_to_goal()
 
     def clone(self) -> Controller:
-        """Clones a controller without using deepcopy.
+        """Clone method for the controller.
 
         Returns:
             Controller: Cloned controller
         """
-        new_controller = Controller.__new__(Controller)
-        new_controller.map_copy = self.map_copy.clone()
-        new_controller.current_agent = self.current_agent.clone()
-        new_controller.current_agent_position = tuple(self.current_agent_position)
-        new_controller.identificator = id(new_controller)
-        return new_controller
+        cloned_env = self._environment.clone()
+        clone_controller = Controller(environment=cloned_env, start_pos=self._start_pos)
+        clone_controller._current_pos = tuple(self._current_pos)
+        clone_controller._step_count = int(self._step_count)
+        clone_controller._weight_shifted = float(self._weight_shifted)
+        clone_controller._distance_to_goal = float(self._distance_to_goal)
+        return clone_controller
 
-    def get_map_copy(self) -> Map:
-        """Returns current map.
-
-        Returns:
-            Map: Current map
-        """
-        return self.map_copy
-
-    def set_map_copy(self, map_copy: Map) -> None:
-        """Sets a map for the controller.
-
-        Args:
-            map_copy (Map): Map to be set
-        """
-        self.map_copy = map_copy.clone()
-
-    def get_current_agent(self) -> Agent:
-        """Returns current agent used by controller.
+    @property
+    def identifier(self) -> int:
+        """Getter method for identifier.
 
         Returns:
-            Agent: Current agent
+            int: ID of controller
         """
-        return self.current_agent
+        return self._identifier
 
-    def set_current_agent(self, current_agent: Agent) -> None:
-        """Sets the current agent for the controller.
-
-        Args:
-            current_agent (Agent): Agent to be set for controller
-        """
-        self.current_agent = current_agent.clone()
-
-    def get_identificator(self) -> int:
-        """Returns identificator of controller.
+    @property
+    def environment(self) -> Environment:
+        """Getter method for environment of controller.
 
         Returns:
-            int: Identifier
+            Environment: Environment of controller.
         """
-        return self.identificator
+        return self._environment
 
-    def get_current_agent_position(self) -> tuple:
-        """Returns current position of the agent.
+    @property
+    def current_pos(self) -> tuple:
+        """Getter method for current_pos.
 
         Returns:
-            tuple: Agent coordinates (x,y)
+            tuple: Current position
         """
-        return self.current_agent_position
+        return self._current_pos
 
-    def set_current_agent_position(self, new_pos: tuple) -> None:
-        """Sets current position of the agent.
+    @current_pos.setter
+    def current_pos(self, position: tuple) -> None:
+        """Setter for the current position.
 
         Args:
-            new_pos (tuple): New position of the agent (x,y)
+            position (tuple): New position on map.
         """
-        self.current_agent_position = new_pos
+        self._current_pos = position
 
-    def is_valid_position(self, pos:tuple) -> bool:
-        """Checks if a position is inside of the map boundaries.
-
-        Args:
-            pos (tuple): Position to be checked (x,y).
+    @property
+    def step_count(self) -> int:
+        """Getter method for step count.
 
         Returns:
-            bool: Truth value for position beeing in map bounds
+            int: Step count
         """
+        return self._step_count
 
-        for coordinate in pos:
-            if coordinate < 0 or coordinate >= self.map_copy.get_map_dim():
-                return False
-
-        return True
-
-    def is_valid_direction(self, direction: Direction, position: tuple | None = None) -> bool:
-        """Checks if a direction is valid from a given position.
-        This check is based on the agents current position if no position is specified.
+    @step_count.setter
+    def step_count(self, new_step_count: int) -> None:
+        """Step count setter for controller.
 
         Args:
-            direction (Direction): Direction to move in
+            new_step_count (int): New step count
+        """
+        self._step_count = new_step_count
+
+    @property
+    def weight_shifted(self) -> float:
+        """Getter for weight shifted.
 
         Returns:
-            bool: Valid state
+            float: Weight shifted
         """
+        return self._weight_shifted
 
-        base_position = position or self.current_agent_position
-        new_pos = tuple(sum(coord) for coord in zip(base_position, direction.value))
-        return self.is_valid_position(new_pos)
-
-    def combine_obstacles(self, obstacle_pos: tuple, destination: tuple) -> None:
-        """Combines the densities of 2 obstacles at specified positions.
+    @weight_shifted.setter
+    def weight_shifted(self, new_weight_shifted: float) -> None:
+        """Setter for weight shifted.
 
         Args:
-            obstacle_pos (tuple): Position of the obstacle that has to be shifted (x,y).
-            destination (tuple): Position of destination obtacle (x,y).
+            new_weight_shifted (float): New weight shifted
         """
+        self._weight_shifted = new_weight_shifted
 
-        obstacle_density = self.map_copy.get_obstacle_density(pos = obstacle_pos)
-        self.map_copy.change_obstacle_density(pos = destination, density = obstacle_density)
-        self.map_copy.eliminate_obstacle(pos = obstacle_pos)
-
-    def calculate_distance_to_goal(self) -> float:
-        """Calculates the agents distance to the goal.
+    @property
+    def distance_to_goal(self) -> float:
+        """Getter for distance to goal.
 
         Returns:
             float: Distance to goal
         """
+        return self._distance_to_goal
 
-        goal = self.map_copy.get_goal()
-        position = self.current_agent_position
-
-        return sum(abs(a - b) for a, b in zip(position, goal))
-
-    def move_agent(self, move_direction: Direction, shifting_direction: Direction) -> bool:
-        """Moves the agent and facilitates map changes.
+    @distance_to_goal.setter
+    def distance_to_goal(self, new_distance_to_goal: float) -> None:
+        """Setter for distance to goal.
 
         Args:
-            new_pos (Direction): Position to move the agent to (x,y).
-            shifting_direction (Direction): Direction the obstacle is shifted towards.
+            new_distance_to_goal (float): New distance to goal
+        """
+        self._distance_to_goal = new_distance_to_goal
+
+    def move(self, move_dir: Direction, shift_dir: Direction) -> bool:
+        """Execute move and obstacle shift on the map.
+
+        Args:
+            move_dir (Direction): Direction of the move.
+            shift_dir (Direction): Direction of the shift.
 
         Returns:
-            bool: Check if move was sucessfull.
+            bool: Was the move successfull or not
         """
 
-        new_pos = tuple(
-            sum(coord) for coord in zip(
-                self.current_agent_position,
-                move_direction.value
-            )
-        )
+        # Calculate new position after move
+        # This is not necessarily the fanciest method but it is fast
+        x, y = self.current_pos
+        dx, dy = move_dir.value
+        new_pos = (x + dx, y + dy)
 
-        # Check if new position is valid
-        if not self.is_valid_position(new_pos):
+        # Calculate shifting position after move
+        dx_shift, dy_shift = shift_dir.value
+        x_move, y_move = new_pos
+        new_shift_pos = (x_move + dx_shift, y_move + dy_shift)
+
+        # If one of both positions is invalid return false
+        if not (self.is_valid_positon(new_pos) and self.is_valid_positon(new_shift_pos)):
             return False
 
-        # Check for obstacle on new_pos
-        # If there is one we need to do the shifting action
-        if self.map_copy.get_obstacle_density(new_pos) > 0:
-            new_obstacle_pos = tuple(sum(coord) for coord in zip(new_pos, shifting_direction.value))
+        # Move agent to new position, increase steps and calculate new distance to goal
+        self._current_pos = new_pos
+        self._step_count = self._step_count+1
+        self._distance_to_goal = self.calulate_distance_to_goal()
 
-            if not self.is_valid_position(new_obstacle_pos):
-                return False
+        # Shift weight, increase weight shifted, remove weight from old position
+        self._environment._environment[new_shift_pos] += self._environment._environment[new_pos]
+        self._weight_shifted += self._environment._environment[new_pos]
+        self._environment._environment[new_pos] = 0
 
-            obstacle_density_on_pos = self.map_copy.get_obstacle_density(new_pos)
-            self.current_agent.increase_weight_shifted(obstacle_density_on_pos)
-            self.combine_obstacles(new_pos, new_obstacle_pos)
-            self.current_agent.increase_amount_of_shifts()
+    def get_all_valid_pairs(self) -> list[tuple]:
+        """Returns a list of all valid movement and shfiting directions pairs at the current position.
 
-        self.set_current_agent_position(new_pos=new_pos)
-        self.current_agent.increase_step_count()
+        Returns:
+            list[tuple]: List of valid pairs.
+        """
+        valid_pairs = []
+        for move_dir in Direction:
+            for shift_dir in Direction:
+                if self.is_valid_pair((move_dir, shift_dir)):
+                    valid_pairs.append((move_dir, shift_dir))
+        
+        return valid_pairs
 
-        if new_pos == self.map_copy.get_goal():
-            self.current_agent.set_goal_collected(True)
+    def is_valid_pair(self, pair: tuple[Direction, Direction]) -> bool:
+        """Check if a movement and shifiting direction pair is valid.
 
+        Args:
+            pair (tuple[Direction, Direction]): Movement and shifting direction pair.
+
+        Returns:
+            bool: Valid or not
+        """
+        move_dir, shift_dir = pair
+        x, y = self.current_pos
+        dx, dy = move_dir.value
+        new_pos = (x + dx, y + dy)
+
+        # Calculate shifting position after move
+        dx_shift, dy_shift = shift_dir.value
+        x_move, y_move = new_pos
+        new_shift_pos = (x_move + dx_shift, y_move + dy_shift)
+
+        if not (self.is_valid_positon(new_pos) and self.is_valid_positon(new_shift_pos)):
+            return False
+        
         return True
+
+    def is_valid_positon(self, position: tuple) -> bool:
+        """Checks if position is inside the map bounds.
+
+        Args:
+            position (tuple): Position to be checked
+
+        Returns:
+            bool: Is position valid or not
+        """
+
+        for coordinate in position:
+            if coordinate < 0 or coordinate >= self.environment.env_dim:
+                return False
+        
+        return True
+
+    def calulate_distance_to_goal(self) -> float:
+        """Calculates the Manhattan distance to the goal from the current position.
+
+        Returns:
+            float: Manhattan distance to goal
+        """
+        return abs(self._current_pos[0] - self._environment._goal[0]) + abs(self._current_pos[1] - self._environment._goal[1])

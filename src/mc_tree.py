@@ -1,127 +1,72 @@
-"""This module contains the class that creates and simulates the MCTS tree."""
+"""This module contains the MCTS tree."""
 
-import math
-import random
+from __future__ import annotations
+from node import Node
+from helper import Helper
+from controller import Controller
+from environment import Environment
 import multiprocessing as mp
 import os
+import random
 import numpy as np
-
 from tqdm import tqdm
-from node import Node
 
-class McTree():
-    """This class represents the MCTS tree."""
 
-    SHARED_NODE = None
+class MctsTree():
+    """This class contains the mcts tree."""
 
     def __init__(self, root: Node):
-        """Init method for McTree.
+        """Init method for the MCTS tree.
 
         Args:
-            root (Node): Root node of tree
-            max_depth (int): Max depth of tree
+            root (Node): Root node for the tree
         """
-        self.root = root
-        self.max_depth = None
-        self.identificator = id(self)
+        self._identifier = id(self)
+        self._root = root
+        # Force the multiprocess start method to be fork for later memory sharing
         mp.set_start_method("fork", force=True)
 
-    def get_root(self) -> Node:
-        """Returns root node of the tree.
+    @property
+    def identifier(self) -> int:
+        """Getter for tree identifier.
 
         Returns:
-            Node: Root node of the tree
+            int: ID of tree
         """
+        return self._identifier
 
-        return self.root
-
-    def set_root(self, root: Node) -> None:
-        """Sets new root for tree.
-
-        Args:
-            root (Node): New root node
-        """
-
-        self.root = root
-
-    def get_max_depth(self) -> int:
-        """Returns max depth of the tree.
+    @property
+    def root(self) -> Node:
+        """Getter for root of MCTS tree.
 
         Returns:
-            int: Max depth of tree
+            Node: Root node of tree
         """
+        return self._root
 
-        return self.max_depth
-
-    def get_identificator(self) -> int:
-        """Returns ID of the tree.
+    def tree_policy(self) -> Node | None:
+        """Tree policy that selects the path from the root to a leaf.
 
         Returns:
-            int: ID of the tree
+            Node | None: Either leaf node or none if i.e. solution was selected.
         """
 
-        return self.identificator
+        current_node = self._root
+        while True:
+            
+            # Check if the node has already reached the goal
+            if current_node.is_terminal_state():
+                return None
 
-    def select_node(self, root: Node) -> Node | None:
-        """Slection method to get a leaf node or one that is not fully expanded.
+            # Check if the node is fully expanded
+            if current_node.get_untried_actions():
+                return current_node
 
-        Args:
-            root (Node): Root node
+            # At this point we know that current_node is neither terminal nor has any expansion left
+            # Safety check for children
+            if current_node._children:
+                current_node = self.ucb_child_selection(current_node)
 
-        Returns:
-            Node | None: Leaf or not fully unexpanded node
-        """
-
-        # Check if node is fully expanded
-        if not root.is_fully_expanded():
-            return root
-
-        # Check if root is terminal state (no expansion needed)
-        # Return none so we dont have to check for terminal state in later steps
-        if root.get_state().get_terminal_state():
-            return None
-
-        selected_node = self.select_node(self.ucb_child_selection(root))
-        return selected_node
-
-    def child_selection(self, node: Node) -> Node:
-        """Selects a child based on the pareto front of children.
-
-        Args:
-            node (Node): Node from where child is selected.
-
-        Returns:
-            Node: Child node
-        """
-
-        # Check if front is available
-        if len(node.get_front()) == 0:
-            node.set_front(node.determine_pareto_front())
-
-        if len(node.get_front()) == 0:
-            print(f"Number of children: {len(node.get_children())}")
-            input()
-
-        front = node.get_front()
-        visits = [child.get_visits() for child in front]
-
-
-        if any(v == 0 for v in visits):
-            probabilities = [1 / len(front)] * len(front)
-        else:
-            total_visits = sum(visits)
-            probabilities = [v / total_visits for v in visits]
-
-        return random.choices(front, probabilities, k=1)[0]
-        #return random.choice(front)
-
-    @staticmethod
-    def normalize_unit_vector(values: dict[str, float]) -> dict[str, float]:
-        """Normalize a dict of numeric values to a unit vector (L2 norm = 1)."""
-        norm = math.sqrt(sum(v ** 2 for v in values.values()))
-        if norm == 0:
-            return {k: 0.0 for k in values}  # avoid division by zero
-        return {k: v / norm for k, v in values.items()}
 
     def ucb_child_selection(self, node: Node) -> Node:
         """Selects children based on pareto dominance of UCB1-Calculations
@@ -133,128 +78,47 @@ class McTree():
             Node: Child node
         TODO: Figure out other selection than random choice (Hypervolume, Crowding-Distance,...)
         """
-        children = node.get_children().values()
+        children = node._children
         number_of_children = len(children)
 
-        for child in children:
+        for child in children.values():
             child: Node
-            child_values = child.get_values()
-            dimensions = len(child_values) # Number of dimensions
-            child_visits = child.get_visits()
-            parent_visits = node.get_visits()
-            normalized_values = McTree.normalize_unit_vector(child.get_values())
+            dimensions = len(child._values) # Number of dimensions
+            child_visits = child._visits
+            parent_visits = node._visits
             exploration_term = np.sqrt(
                 (2*np.log(
                     parent_visits*np.sqrt(np.sqrt(dimensions*number_of_children)))
                 )/child_visits
-            )#from multiprocessing import Pool
-            ucb_vec = {k: v + exploration_term for k, v in normalized_values.items()}
-            child.set_ucb_vector(ucb_vec)
+            )
+            child._ucb_values = {k: v - exploration_term for k, v in child._values.items()}
 
-        pareto_front = Node.determine_pareto_from_ucb(children)
+        pareto_front = Helper.determine_pareto_front_from_nodes(children.values(), True)
         return random.choice(pareto_front)
 
-    def expand(self, node: Node) -> Node:
-        """Creates a child for a given node.
+    def leaf_rollout(self, leaf: Node, simulations: int, maximum_moves: int, rollout_method: function) -> None:
+        """Rollout method for a given leaf. 
+        Acts more as a wrapper for the real multiprocessing rollouts.
 
         Args:
-            node (Node): Node to expand
-
-        Returns:
-            Node: New child node
-        """
-
-        # Get untried actions (all are valid)
-        untried_actions = node.get_untried_actions()
-        move_direction, shift_direction = random.choice(untried_actions)
-
-        # Create new child and move it
-        # No need to deepcopy state, it is deepcopied in childs constructor
-        child = Node(node.get_state(), node)
-        child.get_state().get_state_controller().move_agent(move_direction, shift_direction)
-        child.values = child.get_state().get_state_metrics()
-        child.parent_actions = (move_direction.name, shift_direction.name)
-        node.children[(move_direction, shift_direction)] = child
-
-        return child
-
-    def simulate_leaf(self, leaf: Node, number_of_simulations: int, maximum_moves: int) -> None:
-        """Function that simulates random rollouts from a leaf.
-
-        Args:
-            leaf (Node): Leaf node
-            number_of_simulations (int): Number of simulations
+            leaf (Node): Leaf to be rolled out
+            simulations (int): Number of simultaneous simulations
             maximum_moves (int): Maximum number of moves per simulation
+            rollout_method (function): Rollout function to be used
         """
 
-        McTree.SHARED_NODE = leaf
-
-        with mp.Pool(
-            processes = min(os.cpu_count(), number_of_simulations),
-        ) as pool:
-            it = pool.imap_unordered(
-                McTree.multiprocess_light_rollout,
-                [maximum_moves] * number_of_simulations,
-            )
+        
+        MctsTree.SHARED_NODE = leaf
+        number_of_processes = min(os.cpu_count(), simulations)
+        with mp.Pool(processes=number_of_processes) as p:
+            it = p.imap_unordered(rollout_method, [maximum_moves]*number_of_processes)
             results = list(it)
-
+        
         if results:
-            non_dominated_results = leaf.determine_pareto_from_list(results)
-            leaf.set_values(random.choice(non_dominated_results).get_values())
-
-    @staticmethod
-    def iterative_leaf_simulation(leaf: Node, number_of_sims: int, maximum_depth: int)->list[Node]:
-        """Method that iteratively does the leaf simulations.
-
-        Args:
-            leaf (Node): Leaf for start of simulations
-            number_of_sims (int): Number of simulations
-            maximum_depth (int): Maximum number of views
-
-        Returns:
-            Node: Simulation solutions
-        """
-
-        solutions = []
-
-        for _ in range(number_of_sims):
-            leaf_copy = leaf.clone()
-            copy_controller = leaf_copy.get_state().get_state_controller()
-            for _ in range(maximum_depth):
-                if leaf_copy.get_state().get_terminal_state():
-                    break
-                valid_moves = leaf_copy.get_all_valid_actions()
-                move_direction, shift_direction= random.choice(valid_moves)
-                copy_controller.move_agent(move_direction, shift_direction)
-
-            solutions.append(leaf_copy)
-
-        return solutions
-
-    @staticmethod
-    def multiprocess_light_rollout(maximum_moves: int) -> Node:
-        """Multiprocessing light rollout for leaf simulation.
-
-        Args:
-            maxmimum_moves(int): Maximum number of moves untill break.
-
-        Returns:
-            Node: Copy of node after simulations
-        """
-        leaf_copy = Node(McTree.SHARED_NODE.state.clone(), None)
-        copy_controller = leaf_copy.state.state_controller
-
-        for _ in range (maximum_moves):
-
-            # Check if terminal state was reached
-            if leaf_copy.get_state().get_terminal_state():
-                break
-
-            valid_moves = leaf_copy.get_all_valid_actions()
-            move_direction, shift_direction= random.choice(valid_moves)
-            copy_controller.move_agent(move_direction, shift_direction)
-
-        return leaf_copy
+            chosen_node = random.choice(Helper.determine_pareto_front_from_nodes(results))
+            leaf._values = dict(chosen_node._values)
+        else:
+            raise RuntimeError("Leaf rollout returned no results")
 
     @staticmethod
     def multiprocess_heavy_distance_rollout(maximum_moves: int) -> Node:
@@ -264,155 +128,37 @@ class McTree():
         Args:
             maximum_moves (int): Number of maximum moves till break
 
-        Returns:
+        Returns:leaf_copy = Node(McTree.SHARED_NODE.state.clone(), None)
             Node: Simulated node
         """
 
-        leaf_copy = Node(McTree.SHARED_NODE.state.clone(), None)
-        copy_controller = leaf_copy.state.state_controller
-        goal = copy_controller.map_copy.goal
+        leaf_copy = MctsTree.SHARED_NODE.clone()
+        leaf_copy._parent = None
+        controller = leaf_copy._controller
+        goal = controller._environment._goal
         manhattan = lambda p, q: abs(p[0]-q[0]) + abs(p[1]-q[1])
 
         for _ in range(maximum_moves):
             # Break if we reached terminal state
-            if leaf_copy.get_state().get_terminal_state():
+            if leaf_copy.is_terminal_state():
                 break
 
-            agent_pos = copy_controller.current_agent_position
+            current_pos = controller._current_pos
             # Get needed parts of calculation and prepare move list
-            current_distance_to_goal = manhattan(agent_pos, goal)
+            current_distance_to_goal = manhattan(current_pos, goal)
             distance_minimizing_moves = []
-            valid_moves = leaf_copy.get_all_valid_actions()
-
+            valid_moves = leaf_copy._controller.get_all_valid_pairs()
             # Get moves that do not increase distance
             for move_dir, shifting_dir in valid_moves:
-                new_pos = (agent_pos[0] + move_dir.value[0],
-                           agent_pos[1] + move_dir.value[1])
+                new_pos = (current_pos[0] + move_dir.value[0],
+                           current_pos[1] + move_dir.value[1])
                 new_distance_to_goal = manhattan(new_pos, goal)
                 if new_distance_to_goal <= current_distance_to_goal:
                     distance_minimizing_moves.append((move_dir, shifting_dir))
 
             # Randomly chose from moves
             move_direction, shift_direction = random.choice(distance_minimizing_moves)
-            copy_controller.move_agent(move_direction, shift_direction)
-        return leaf_copy
-
-    @staticmethod
-    def multiprocess_heavy_pareto_rollout(maximum_moves: int) -> Node:
-        """Heavy rollout that uses pareto dominance to select the next move.
-
-        Args:
-            maximum_moves (int): Maximum number of tested moves
-
-        Returns:
-            Node: Node to simulate
-        """
-
-        def dominates(tuple1: tuple, tuple2: tuple) -> bool:
-            """Determines if move 1 is dominates the other
-
-            Args:
-                tuple1 (tuple): Move to be checked if dominates
-                tuple2 (tuple): Move to be checked if dominated
-
-            Returns:
-                bool: Domination status
-            """
-            return(
-                (tuple1[0] <= tuple2[0] and tuple1[1] <= tuple2[1] and tuple1[2] <= tuple2[2]) and
-                (tuple1[0] < tuple2[0] or tuple1[1] < tuple2[1] or tuple1[2] < tuple2[2])
-            )
-
-        
-        leaf_copy = Node(McTree.SHARED_NODE.state.clone(), None)
-        copy_controller = leaf_copy.state.state_controller
-        manhattan = lambda p, q: abs(p[0]-q[0]) + abs(p[1]-q[1]) # Fancy lambda expression to calculate manhattan distance
-        map_list = copy_controller.map_copy.map
-        agent = copy_controller.current_agent
-        goal = copy_controller.map_copy.goal
-
-        for _ in range(maximum_moves):
-            if leaf_copy.get_state().get_terminal_state():
-                break
-
-            valid_moves = leaf_copy.get_all_valid_actions()
-            current_pos = copy_controller.current_agent_position
-            front: list[tuple] = []
-
-            for move_dir, shift_dir in valid_moves:
-                new_pos = (current_pos[0] + move_dir.value[0],
-                        current_pos[1] + move_dir.value[1])
-
-                obstacle_weight = map_list[new_pos[0]][new_pos[1]]
-                candidate = (
-                    agent.step_count + 1,
-                    manhattan(new_pos, goal),
-                    agent.weight_shifted + obstacle_weight,
-                    (move_dir, shift_dir),
-                )
-
-                # Check if candidate is dominated by any member of the front
-                dominated = False
-                for f in front:
-                    if dominates(f, candidate):
-                        dominated = True
-                        break
-                if dominated:
-                    continue
-
-                # Remove members of the front that are dominated by the candidate
-                i = 0
-                while i < len(front):
-                    if dominates(candidate, front[i]):
-                        front.pop(i)
-                    else:
-                        i += 1
-                front.append(candidate)
-
-            move_dir, shift_dir = random.choice(front)[3]
-            copy_controller.move_agent(move_dir, shift_dir)
-        return leaf_copy
-
-    @staticmethod
-    def multiprocess_heavy_minweight_rollout(maximum_moves: int) -> Node:
-        """Heavy rollout method that picks the lowest weight from the neighborhood to move to and shift.
-        The only viable moves for this are those that minimize distance to goal.
-
-        Args:
-            maximum_moves (int): Maximum number of moves before break
-
-        Returns:
-            Node: Simulated node
-        """
-        leaf_copy = Node(McTree.SHARED_NODE.state.clone(), None)
-        copy_controller = leaf_copy.state.state_controller
-        manhattan = lambda p, q: abs(p[0]-q[0]) + abs(p[1]-q[1])
-        map_list = copy_controller.map_copy.map
-        goal = copy_controller.map_copy.goal
-
-        for _ in range(maximum_moves):
-            # Break if we reached terminal state
-            if leaf_copy.get_state().get_terminal_state():
-                break
-
-            # Get needed parts of calculation and prepare move list
-            current_position = copy_controller.current_agent_position
-            current_distance_to_goal = manhattan(current_position, goal)
-            valid_moves = leaf_copy.get_all_valid_actions()
-            smallest_weight = np.inf # Large number to be set later
-            selected_move = None
-
-            # Get moves that do not increase distance
-            for move_dir, shift_dir in valid_moves:
-                new_pos = (current_position[0] + move_dir.value[0],
-                            current_position[1] + move_dir.value[1])
-                #print(f"New Pos: {new_pos}, Current Pos: {current_position}")
-                new_distance_to_goal = manhattan(new_pos, goal)
-                if new_distance_to_goal <= current_distance_to_goal:
-                    if map_list[new_pos[0]][new_pos[1]] < smallest_weight:
-                        selected_move = (move_dir, shift_dir)
-
-            copy_controller.move_agent(selected_move[0], selected_move[1])
+            controller.move(move_direction, shift_direction)
         return leaf_copy
 
     def backpropagate(self, node: Node) -> None:
@@ -425,57 +171,42 @@ class McTree():
 
         current_node = node
         while current_node is not None:
-            current_node.increase_visits(1)
+            current_node._visits += 1
             # Check if current node has any children
-            if current_node.get_children():
-
+            if current_node._children:
                 # Iterate over each key/value
-                for key in current_node.get_values().keys():
+                for key in current_node._values:
                     value = 0
-                    for child in current_node.get_children().values():
-                        value += child.get_values()[key]
-                    value/=len(current_node.get_children())
-                    current_node.set_value(key, value)
+                    for child in current_node._children.values():
+                        value += child._values[key]
+                    value/=len(current_node._children)
+                    current_node._values[key] = value
 
-            current_node = current_node.get_parent()
+            current_node = current_node._parent
 
-    def run_search(self, iterations: int = 1) -> None:
-        """Runs the MCTS search for a specified number of iterations.
+    def search(self, iterations: int) -> None:
+        """Methods that builds the tree and looks for solutions
 
         Args:
-            iterations (int, optional): Number of times to run MCTS. Defaults to 1.
+            iterations (int): Number of search iterations to complete
         """
 
+        # Make list for found solutions
         solutions = []
 
         for _ in tqdm(range(iterations)):
 
-            leaf = self.select_node(self.root)
+            # Use tree policy
+            # Reminder: Tree policy returns none if selected node has reached goal or we are in unsolvable state
+            current_node = self.tree_policy()
 
-            if leaf is not None:
-                goal = leaf.get_state().get_state_controller().get_map_copy().get_goal()
-                pos = leaf.get_state().get_state_controller().get_current_agent_position()
+            if current_node is not None:
+                # Expand the leaf (expand method automatically adds it to the current_nodes children and also returns it)
+                child = current_node.expand()
 
-                if goal == pos: 
-                    if leaf not in solutions:
-                        solutions.append(leaf)
-                    continue
-
-                new_child = self.expand(leaf)
-                self.simulate_leaf(new_child, 16, 200)
-                self.backpropagate(new_child)
-
-        solutions = Node.determine_pareto_from_list(solutions)
-        for solution in solutions:
-            node = solution
-            path = []
-            actions = []
-            while node is not None:
-                path.append(node.get_state().get_state_controller().get_current_agent_position())
-                actions.append(node.get_parent_actions())
-                node = node.get_parent()
-            print("####################################################################")
-            path.reverse()
-            actions.reverse()
-            print(path)
-            print(actions)
+                if child.is_terminal_state():
+                    print("Found new solution")
+                    solutions.append(child)
+                else:
+                    self.leaf_rollout(child, 16, 100, self.multiprocess_heavy_distance_rollout)
+                    self.backpropagate(child)

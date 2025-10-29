@@ -3,28 +3,26 @@
 import networkx as nx
 from networkx.drawing.nx_pydot import graphviz_layout
 import matplotlib.pyplot as plt
-from state import State
-from agent import Agent
-from map import Map
+from environment import Environment
 from node import Node
-from mc_tree import McTree
+from mc_tree import MctsTree
 from controller import Controller
+import random
 
 def main():
     """ Main method that runs all components togehter"""
 
-    test_map = Map(map_dim=7, goal=(6,6))
-    agent = Agent()
-    controller = Controller(map_copy=test_map, current_agent=agent)
+    random.seed(420)
 
-    root_state = State(state_controller=controller)
-    root_node = Node(state=root_state)
+    test_env = Environment(env_dim=3, goal=(2,2))
+    controller = Controller(environment=test_env)
+    root_node = Node(controller=controller)
 
-    tree = McTree(root=root_node)
+    tree = MctsTree(root=root_node)
 
     print("Starting MCTS ...")
-    tree.run_search(10000)
-    visualize_tree(tree.get_root(), filename="mcts_tree.svg", max_depth=None)
+    tree.search(300)
+    #visualize_tree(tree._root, filename="mcts_tree.svg", max_depth=None)
 
 
 def visualize_tree(root, filename: str = "mcts_tree.svg", max_depth: int | None = None) -> None:
@@ -45,7 +43,7 @@ def visualize_tree(root, filename: str = "mcts_tree.svg", max_depth: int | None 
         if max_depth is not None and depth > max_depth:
             continue
 
-        node_id = node.get_identificator()
+        node_id = node._identifier
         G.add_node(node_id)
         G.nodes[node_id]["label"] = f"Depth {node.get_depth()}\nVisits {node.get_visits()}"
 
@@ -87,7 +85,6 @@ def visualize_tree(root, filename: str = "mcts_tree.svg", max_depth: int | None 
 
     print(f"[+] MCTS tree saved to {filename}")
 
-
 def hierarchy_pos(graph, root=None, width=1.0, vert_gap=0.3, vert_loc=0, xcenter=0.5):
     """Position nodes in a hierarchy (tree layout)."""
     if not nx.is_tree(graph):
@@ -115,7 +112,6 @@ def hierarchy_pos(graph, root=None, width=1.0, vert_gap=0.3, vert_loc=0, xcenter
         return pos
 
     return _hierarchy_pos(graph, root, 0, width, vert_loc)
-
 
 def visualize_tree_hierarchical(root, max_depth=3, show_metrics=True, save_to_file=False):
     """Visualize the full MCTS tree in a hierarchical layout.
@@ -175,7 +171,6 @@ def visualize_tree_hierarchical(root, max_depth=3, show_metrics=True, save_to_fi
         plt.close()
     else:
         plt.show()
-
 
 if __name__ == "__main__":
     main()

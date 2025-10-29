@@ -1,407 +1,163 @@
-"""This module represents a the node class for the MCTS tree."""
-
+"""This module contains the node class which later builds the MCTS tree."""
 from __future__ import annotations
-from directions import Direction
-from state import State
+from controller import Controller
+import random
 
 class Node():
-    """This is the node class, which is used for mcts."""
+    """This node class is the basis for later building the MCTS tree."""
 
-    def __init__(self, state: State, parent: Node | None = None):
-        """Init method for the node class.
+    def __init__(self, controller: Controller, parent: Node | None = None):
+        """Init method for the node class that accepts a controller and a parent node.
 
         Args:
-            state (State): State in the current node.
-            parent (Node | None, optional): Parent node. Defaults to None.
+            controller (Controller): Controller for the node
+            parent (Node | None, optional): Possible parent of the node. Defaults to None.
         """
 
-        self.depth = parent.depth + 1 if parent else 0
-        self.state = state.clone()
-        self.parent_actions = None
-        self.parent = parent
-        self.children = {}
-        self.identificator = id(self)
-        self.visits = 0
-        self.values = {
-            "step_count": 0,
-            "weight_shifted": 0.0,
-            "distance_to_goal": 0,
-        }
-        self.ucb_vector = []
-        self.front = []
-
-    def __str__(self):
-        """String method for the node class."""
-        return f"Visits: {self.visits}\nValues: {self.values}\nID: {self.identificator}"
+        self._identifier = id(self)
+        self._controller = controller.clone()
+        self._parent = parent
+        if parent is not None:
+            self._depth = int(self._parent._depth) + 1
+        else:
+            self._depth = 0
+        self._children = {}
+        self._visits = 1
+        self._values = {"step_count": self._controller._step_count,
+                        "weight_shifted": self._controller._weight_shifted,
+                        "distance_to_goal": self._controller._distance_to_goal}
+        self._ucb_values = {"step_count": 0,
+                            "weight_shifted": 0,
+                            "distance_to_goal": 0
+                            }
 
     def clone(self) -> Node:
-        """This method creates a clone of a node without deepcopy
+        """Clone method for node object.
 
         Returns:
             Node: Cloned node
         """
+        new_node = Node(self._controller, self._parent)
+        new_node._depth = int(self._depth)
+        new_node._children = self._children
+        new_node._visits = int(self._visits)
+        new_node._values = dict(self._values)
+        new_node._ucb_values = dict(self._ucb_values)
 
-        new_node = Node.__new__(Node) # This skips the init
-        new_node.depth = self.depth
-        new_node.state = self.state.clone()
-        new_node.parent = self.parent
-        new_node.children = self.children
-        new_node.identificator = id(new_node)
-        new_node.visits = self.visits
-        new_node.values = self.values.copy()
-        new_node.ucb_vector = {}
-        new_node.front = []
-        new_node.parent_actions = self.parent_actions
         return new_node
 
-    def get_depth(self) -> int:
-        """Returns the depth of a node.
-
-        Returns:
-            int: Depth of node
-        """
-
-        return self.depth
-
-    def set_depth(self, depth: int) -> None:
-        """Sets a specified depth for the node.
-
-        Args:
-            depth (int): depth
-        """
-
-        self.depth = depth
-
-    def get_state(self) -> State:
-        """Returns the state of the current node.
-
-        Returns:
-            State: State of the current node
-        """
-
-        return self.state
-
-    def get_parent(self) -> Node | None:
-        """Returns the parent node of the current node.
-
-        Returns:
-            Node: Parent node
-        """
-
-        return self.parent
-
-    def set_parent(self, parent: Node | None) -> None:
-        """Sets the parent of the current node.
-
-        Args:
-            parent (Node | None): New parent for node
-        """
-        self.parent = parent
-
-    def get_parent_actions(self) -> tuple:
-        """Returns action tuple that spawned this node.
-
-        Returns:
-            tuple: Action combination
-        """
-        return self.parent_actions
-
-    def set_parent_actions(self, actions: tuple) -> None:
-        """Sets the action combination from which this node was generated.
-
-        Args:
-            actions (tuple): Action tuple
-        """
-
-        self.parent_actions = actions
-
-    def get_children(self) -> dict | None :
-        """Returns children of the current Node.
-
-        Returns:
-            dict | None: Children of current node
-        """
-
-        return self.children
-
-    def set_children(self, children: dict) -> None:
-        """Sets children of current node.
-
-        Args:
-            children (dict): New children of current node
-        """
-
-        self.children = children
-
-    def get_identificator(self) -> int:
-        """Returns ID of current node.
+    @property
+    def identifier(self) -> int:
+        """Getter for identifier.
 
         Returns:
             int: ID of node
         """
+        return self._identifier
 
-        return self.identificator
-
-    def get_ucb_vector(self) -> dict:
-        """Returns the UCB1 vector of a node.
-
-        Returns:
-            list: UCB1 vector
-        """
-        return self.ucb_vector
-
-    def set_ucb_vector(self, ucb_vec: dict) -> None:
-        """Sets the UCB Vector for a node.
-
-        Args:
-            ucb_vec (list): New UCB vector
-        """
-        self.ucb_vector = ucb_vec.copy()
-
-    def get_visits(self) -> int:
-        """Returns the number of times the node was visited.
+    @property
+    def controller(self) -> int:
+        """Getter for controller.
 
         Returns:
-            int: Number of visits
+            int: Controller of node
         """
+        return self._controller
 
-        return self.visits
-
-    def set_visits(self, visits: int) -> None:
-        """Sets the number of node visits to a specific amount.
-
-        Args:
-            visits (int): Number of times the node was visited.
-        """
-
-        self.visits = visits
-
-    def increase_visits(self, amount: int) -> None:
-        """Increases the number of visits by a given amount.
-
-        Args:
-            amount (int): Amount of visits
-        """
-
-        self.visits += amount
-
-    def get_values(self) -> dict:
-        """Returns the value of the node.
+    @property
+    def parent(self) -> int:
+        """Getter for parent.
 
         Returns:
-            float: Value of the node.
+            node: parent of node
         """
-
-        return self.values
-
-    def set_value(self, key: any, value: int | float) -> None:
-        """Sets the value to a specified amount.
+        return self._parent
+    
+    @parent.setter
+    def parent(self, new_parent: Node) -> None:
+        """Setter for parent of node
 
         Args:
-            key: Key in values dictionary
-            value (float): New value
+            new_parent (Node): New parent of node.
         """
+        self._parent = new_parent
+        self._depth = new_parent._depth + 1
 
-        self.values[key] = value
+    @property
+    def children(self) -> dict:
+        """Getter for children of node
 
-    def set_values(self, values: dict) -> None:
-        """Sets the full dict of values to a specified one.
+        Returns:
+            dict: Children of node.
+        """
+        return self._children
+
+    @property
+    def visits(self) -> int:
+        """Getter for visits of node.
+
+        Returns:
+            int: Visits of node
+        """
+        return self._visits
+
+    @visits.setter
+    def visits(self, new_visits: int) -> None:
+        """Visit setter for nodes.
 
         Args:
-            values (dict): New value dict
+            new_visits (int): New visits for node.
         """
-        self.values = values
+        self._visits = new_visits
 
-    def get_front(self) -> list:
-        """Returns the pareto front of all children.
+    @property
+    def values(self) -> dict:
+        """Getter for values of node.
 
         Returns:
-            list: Pareto front of children
+            dict: Values of node
         """
-        return self.front
+        return self._values
 
-    def set_front(self, front: list) -> None:
-        """Sets the pareto front for this node.
+    def refresh_values(self) -> None:
+        """Retrieves the current values from the controller and loads them into the dict."""
+        self._values = {"step_count": self._controller._step_count,
+                        "weight_shifted": self._controller._weight_shifted,
+                        "distance_to_goal": self._controller._distance_to_goal}
 
-        Args:
-            front (list): New pareto front.
-        """
-        self.front = front
-
-    def get_all_valid_actions(self) -> list:
-        """Returns all valid actions in this state.
+    def get_untried_actions(self) -> list[tuple]:
+        """Returns all actions that were not yet tried on that node.
 
         Returns:
-            list: List of movement and shfiting direction tuples.
+            list[tuple]: Untried actions
         """
-
-        valid_action_pairs = []
-
-        controller = self.get_state().get_state_controller()
-        for move_direction in Direction:
-
-            # See if direction is valid
-            move_valid = controller.is_valid_direction(
-                            move_direction,
-                            controller.get_current_agent_position()
-                        )
-
-            if move_valid:
-                for shift_direction in Direction:
-
-                    new_pos = tuple(
-                        sum(coord) for coord in zip(
-                                controller.get_current_agent_position(),
-                                move_direction.value)
-                    )
-
-                    # See if shift is valid from new pos
-                    shift_valid = controller.is_valid_direction(
-                        shift_direction,
-                        new_pos
-                    )
-
-                    if shift_valid:
-                        valid_action_pairs.append((move_direction, shift_direction))
-
-        return valid_action_pairs
-
-    def get_untried_actions(self) -> list:
-        """Returns valid actions that are not yet expanded on.
-
-        Returns:
-            list: New valid actions
-        """
-        all_valid_actions = self.get_all_valid_actions()
-        expanded_actions = [child for child in self.children.keys()]
-
-        untried_actions = [pair for pair in all_valid_actions if pair not in expanded_actions]
-
+        valid_actions = self._controller.get_all_valid_pairs()
+        untried_actions = [action for action in valid_actions if action not in self._children]
         return untried_actions
 
-    def is_fully_expanded(self) -> bool:
-        """Method that determines if a node is fully expanded."""
-
-        untried_actions = self.get_untried_actions()
-        if len(untried_actions) == 0:
-            return True
-        return False
-
-    def is_dominated(self, node: Node) -> bool:
-        """Determines if the current node is dominated by the specified one.
-
-        Args:
-            node (Node): Node to be checked for domination.
+    def is_terminal_state(self) -> bool:
+        """Method that checks if the current state is terminal
 
         Returns:
-            bool: Is dominated or not
+            bool: Is terminal
         """
-        node_values = node.get_values()
-        return(
-            all(node_values[key] <= self.values[key] for key in node_values.keys()) and
-            any(node_values[key] < self.values[key] for key in node_values.keys())
-        )
-
-    def is_ucb_dominated(self, node: Node) -> bool:
-        """Determined if current node is UCB1 dominated by the speicified one.
-
-        Args:
-            node (Node): Node to be checked for domination.
+        return self._controller._distance_to_goal == 0
+    
+    def expand(self) -> Node:
+        """Method that adds a new child to the current node if there are untried actions.
 
         Returns:
-            bool: Is dominated or not
-        """
-        node_ucb_vec = node.get_ucb_vector()
-        return(
-            all(node_ucb_vec[key] <= self.ucb_vector[key] for key in node_ucb_vec.keys()) and
-            any(node_ucb_vec[key] < self.ucb_vector[key] for key in node_ucb_vec.keys())
-        )
-
-    def determine_pareto_front(self) -> list:
-        """Determines the pareto front, based on childrens metrics.
-
-        Returns:
-            list: Pareto front
+            Node: New child node
         """
 
-        # At first all children are in front
-        children = list(self.children.values())
-        non_dominated_children = []
-
-        # Then we remove them when they are domianted
-        for child1 in children:
-            # Domination flag
-            dominated = False
-
-            for child2 in children:
-                if child1 is child2:
-                    continue
-
-                if child1.is_dominated(child2):
-                    dominated = True
-                    break
-
-            if not dominated:
-                non_dominated_children.append(child1)
-
-        return non_dominated_children
-
-    @staticmethod
-    def determine_pareto_from_list(all_nodes: list[Node]) -> list:
-        """Determines a pareto front from a list of nodes.
-
-        Args:
-            all_nodes (list[Node]): All possible nodes.
-
-        Returns:
-            list: Pareto front of nodes.
-        """
-        non_dominated_nodes = []
-
-        # Then we remove them when they are domianted
-        for child1 in all_nodes:
-            # Domination flag
-            dominated = False
-
-            for child2 in all_nodes:
-                if child1 is child2:
-                    continue
-
-                if child1.is_dominated(child2):
-                    dominated = True
-                    break
-
-            if not dominated:
-                non_dominated_nodes.append(child1)
-
-        return non_dominated_nodes
-
-    @staticmethod
-    def determine_pareto_from_ucb(all_nodes: list[Node]) -> list[Node]:
-        """Determine pareto front from UCB1 vector of nodes in list.
-
-        Args:
-            all_nodes (list[Node]): Nodes to determine front from
-
-        Returns:
-            list[Node]: Pareto front
-        """
-        non_dominated_nodes = []
-
-        # Then we remove them when they are domianted
-        for child1 in all_nodes:
-            # Domination flag
-            dominated = False
-
-            for child2 in all_nodes:
-                if child1 is child2:
-                    continue
-
-                if child1.is_ucb_dominated(child2):
-                    dominated = True
-                    break
-
-            if not dominated:
-                non_dominated_nodes.append(child1)
-
-        return non_dominated_nodes
+        if self.get_untried_actions():
+            move_pair = random.choice(self.get_untried_actions())
+            move_dir, shift_dir = move_pair
+            child_node = Node(self._controller, self)
+            child_node._controller.move(move_dir, shift_dir)
+            # After move we load the new objective values into value dict
+            child_node.refresh_values()
+            self._children[move_pair] = child_node
+            return child_node
+        else:
+            raise RuntimeError("Attempted to expand a fully expanded node.")
