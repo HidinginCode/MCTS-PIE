@@ -212,6 +212,14 @@ class MctsTree():
                     self.leaf_rollout(child, 16, 100, self.multiprocess_heavy_distance_rollout)
                     self.backpropagate(child)
         
+
+        solutions = Helper.determine_pareto_front_from_nodes(solutions)
         for solution in solutions:
             solution: Node
-            Analyzer.create_heatmap(solution._controller._environment._environment, solution._controller._start_pos, solution._controller._environment._goal)
+            current = solution
+            path = []
+            while current is not None:
+                path.append(current._controller._current_pos)
+                current = current._parent
+            path.reverse
+            Analyzer.create_heatmap(solution._controller._environment._environment, solution._controller._start_pos, solution._controller._environment._goal, path)

@@ -8,20 +8,22 @@ from node import Node
 from mc_tree import MctsTree
 from controller import Controller
 import random
+import numpy as np
 
 def main():
     """ Main method that runs all components togehter"""
 
     random.seed(420)
+    np.random.seed(420)
 
-    test_env = Environment(env_dim=5, goal=(4,4))
+    test_env = Environment(env_dim=4, goal=(3,3))
     controller = Controller(environment=test_env)
     root_node = Node(controller=controller)
 
     tree = MctsTree(root=root_node)
 
     print("Starting MCTS ...")
-    tree.search(2000)
+    tree.search(4000)
     #visualize_tree(tree._root, filename="mcts_tree.svg", max_depth=None)
 
 

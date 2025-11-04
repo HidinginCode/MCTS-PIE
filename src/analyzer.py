@@ -20,7 +20,7 @@ class Analyzer():
         return self._identifier
     
     @staticmethod
-    def create_heatmap(environment: np.ndarray, start: tuple, goal: tuple):
+    def create_heatmap(environment: np.ndarray, start: tuple, goal: tuple, path: list[tuple]):
         """Creates a heatmap of the environment and highlights start and goal.
 
         Args:
@@ -31,9 +31,9 @@ class Analyzer():
         data = environment
         highlighted_cells = [start, goal]
         fig, ax = plt.subplots()
-        im = ax.imshow(data, aspect='equal')
+        im = ax.imshow(data, aspect='equal',cmap="gray")
 
-        # Add color bar
+
         plt.colorbar(im, ax=ax)
 
         # Highlight the chosen squares
@@ -47,6 +47,25 @@ class Analyzer():
             )
             ax.add_patch(rect)
 
+        for r, c in path:
+            ax.plot(c, r, 'o', markersize=6, color='blue', markeredgecolor='black', markeredgewidth=1.2)  # Dot in the cell
+
+
+        for (r1, c1), (r2, c2) in zip(path[:-1], path[1:]):
+            ax.annotate(
+                '', 
+                xy=(c1, r1), 
+                xytext=(c2, r2),
+                arrowprops=dict(arrowstyle='->', 
+                                linewidth=2.0,              
+                                color='white',              
+                                shrinkA=0, shrinkB=0)
+            )
+
+
+        ax.set_xticks(np.arange(-0.5, data.shape[1], 1))
+        ax.set_yticks(np.arange(-0.5, data.shape[0], 1))
+        ax.grid(color='black', linestyle='-', linewidth=0.5)
         # Optional: Add title and better ticks
         ax.set_title("Heatmap of Environment")
         ax.set_xticks(range(data.shape[1]))
