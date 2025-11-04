@@ -10,6 +10,7 @@ import os
 import random
 import numpy as np
 from tqdm import tqdm
+from analyzer import Analyzer
 
 
 class MctsTree():
@@ -210,3 +211,7 @@ class MctsTree():
                 else:
                     self.leaf_rollout(child, 16, 100, self.multiprocess_heavy_distance_rollout)
                     self.backpropagate(child)
+        
+        for solution in solutions:
+            solution: Node
+            Analyzer.create_heatmap(solution._controller._environment._environment, solution._controller._start_pos, solution._controller._environment._goal)

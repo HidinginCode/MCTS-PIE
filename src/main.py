@@ -14,14 +14,14 @@ def main():
 
     random.seed(420)
 
-    test_env = Environment(env_dim=3, goal=(2,2))
+    test_env = Environment(env_dim=5, goal=(4,4))
     controller = Controller(environment=test_env)
     root_node = Node(controller=controller)
 
     tree = MctsTree(root=root_node)
 
     print("Starting MCTS ...")
-    tree.search(300)
+    tree.search(2000)
     #visualize_tree(tree._root, filename="mcts_tree.svg", max_depth=None)
 
 
