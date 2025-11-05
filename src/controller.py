@@ -20,7 +20,7 @@ class Controller():
         self._current_pos = tuple(start_pos)
         self._step_count = 0
         self._weight_shifted = 0.0
-        self._distance_to_goal = self.calulate_distance_to_goal()
+        self._distance_to_goal = self.calculate_distance_to_goal()
 
     def clone(self) -> Controller:
         """Clone method for the controller.
@@ -155,7 +155,7 @@ class Controller():
         # Move agent to new position, increase steps and calculate new distance to goal
         self._current_pos = new_pos
         self._step_count = self._step_count+1
-        self._distance_to_goal = self.calulate_distance_to_goal()
+        self._distance_to_goal = self.calculate_distance_to_goal()
 
         # Shift weight, increase weight shifted, remove weight from old position
         self._environment._environment[new_shift_pos] += self._environment._environment[new_pos]
@@ -216,7 +216,7 @@ class Controller():
         
         return True
 
-    def calulate_distance_to_goal(self) -> float:
+    def calculate_distance_to_goal(self) -> float:
         """Calculates the Manhattan distance to the goal from the current position.
 
         Returns:

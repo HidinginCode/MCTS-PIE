@@ -9,6 +9,7 @@ from mc_tree import MctsTree
 from controller import Controller
 import random
 import numpy as np
+import moa_star
 
 def main():
     """ Main method that runs all components togehter"""
@@ -16,15 +17,20 @@ def main():
     random.seed(420)
     np.random.seed(420)
 
-    test_env = Environment(env_dim=4, goal=(3,3))
-    controller = Controller(environment=test_env)
-    root_node = Node(controller=controller)
+    #test_env = Environment(env_dim=4, goal=(3,3))
+    #controller = Controller(environment=test_env)
+    #root_node = Node(controller=controller)
 
-    tree = MctsTree(root=root_node)
+    #tree = MctsTree(root=root_node)
 
-    print("Starting MCTS ...")
-    tree.search(4000)
+    #print("Starting MCTS ...")
+    #tree.search(4000)
+    paths = moa_star.moa_star((0,0), (4,4), 5, moa_star.heuristic)
+    for path in paths: 
+        path.reverse()
+        print(path)
     #visualize_tree(tree._root, filename="mcts_tree.svg", max_depth=None)
+
 
 
 def visualize_tree(root, filename: str = "mcts_tree.svg", max_depth: int | None = None) -> None:
