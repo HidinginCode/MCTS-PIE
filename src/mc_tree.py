@@ -170,7 +170,10 @@ class MctsTree():
             node (Node): Root of backpropagation
         """
 
+        last_node = None
         current_node = node
+        values_of_leaf = node._values
+        path = []
         while current_node is not None:
             current_node._visits += 1
             # Check if current node has any children
@@ -183,6 +186,16 @@ class MctsTree():
                     value/=len(current_node._children)
                     current_node._values[key] = value
 
+            # Append movement/shifting direction and values to path
+            if last_node is not None:
+                movement_pair = [key for key, value in current_node._children.items() if value is last_node][0]
+                path.append((movement_pair, values_of_leaf))
+                current_node._pareto_paths.append(list(path))
+
+            if current_node._parent is None:
+                print(f"\n\nRoot pareto paths: {current_node._pareto_paths[0]}")
+            
+            last_node = current_node
             current_node = current_node._parent
 
     def search(self, iterations: int) -> None:

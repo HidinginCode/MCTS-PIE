@@ -30,6 +30,7 @@ class Node():
                             "weight_shifted": 0,
                             "distance_to_goal": 0
                             }
+        self._pareto_paths = [] # This holds action, movement and values like the following ((move_dir, action_dir), value_dict)
 
     def clone(self) -> Node:
         """Clone method for node object.
@@ -43,6 +44,7 @@ class Node():
         new_node._visits = int(self._visits)
         new_node._values = dict(self._values)
         new_node._ucb_values = dict(self._ucb_values)
+        new_node._pareto_paths = list(self._pareto_paths)
 
         return new_node
 
