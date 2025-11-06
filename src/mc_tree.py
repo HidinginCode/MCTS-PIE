@@ -162,6 +162,28 @@ class MctsTree():
             controller.move(move_direction, shift_direction)
         return leaf_copy
 
+    @staticmethod
+    def path_domination(path1: list, path2: list) -> bool:
+        """Returns if path1 dominates path2, using the last value entry of the paths.
+
+        Args:
+            path1 (list): Path one (one entry in a path looks like ((move_dir, shift_dir), value dict) ).
+            path2 (list): Path two
+
+        Returns:
+            bool: Does path one dominate path 2
+        """
+        value_of_path1 = path1[-1][1] # Extracts value dict from last position in path
+        value_of_path2 = path2[-1][1]
+
+        a1, a2, a3 =value_of_path1["step_count"],value_of_path1["weight_shifted"],value_of_path1["distance_to_goal"]
+        b1, b2, b3 = value_of_path2["step_count"], value_of_path2["weight_shifted"], value_of_path2["distance_to_goal"]
+
+        return (
+            (a1 <= b1 and a2 <= b2 and a3 <= b3) and
+            (a1 < b1 or a2 < b2 or a3 < b3)
+        )
+
     def backpropagate(self, node: Node) -> None:
         """Backpropagates metrics from the new child node through the parents.
         This makes the parents metrics an average of the metrics of their children.
@@ -190,10 +212,26 @@ class MctsTree():
             if last_node is not None:
                 movement_pair = [key for key, value in current_node._children.items() if value is last_node][0]
                 path.append((movement_pair, values_of_leaf))
-                current_node._pareto_paths.append(list(path))
+
+                indices_to_remove = []
+                dominated = False
+                for i, pareto_path in enumerate(current_node._pareto_paths):
+                    if MctsTree.path_domination(pareto_path, path):
+                        dominated = True
+                        break
+                    if MctsTree.path_domination(path, pareto_path): # Case that existing path is dominated by new one
+                        indices_to_remove.append(i)
+
+                indices_to_remove.reverse() # Reverse so biggest index is removed first later
+
+                if not dominated:
+                    if indices_to_remove:
+                        for i in indices_to_remove:
+                            current_node._pareto_paths.pop(i)
+                    current_node._pareto_paths.append(list(path))
 
             if current_node._parent is None:
-                print(f"\n\nRoot pareto paths: {current_node._pareto_paths[0]}")
+                print(f"\n\nRoot pareto paths: {len(current_node._pareto_paths)}")
             
             last_node = current_node
             current_node = current_node._parent
