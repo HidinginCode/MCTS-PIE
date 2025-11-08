@@ -1,5 +1,7 @@
 """This module contains a helper class which contains some functions that might need to be called."""
 from node import Node
+import numpy as np
+import pymoo.indicators.hv as HV
 
 class Helper():
     """Helper class with helper methods."""
@@ -66,5 +68,22 @@ class Helper():
                 non_dominated_nodes.append(node1)
         
         return non_dominated_nodes
+    
+    @staticmethod
+    def hypervolume(points: list):
+        """Returns the index of the value with the biggest hypervolume for the list of points provided.
 
+        Args:
+            points (list): List of HV per point
+        """
+        values = [list(point.values()) for point in points]
+        #print(values)
+
+        # Compute reference point
+        worst = np.max(values, axis=0)
+        ranges = np.max(values, axis=0) - np.min(values, axis=0)
+        ref = worst + 0.1 * (ranges + 1e-12) # Add margin to worst point
+
+        hv = HV.Hypervolume(ref_point=np.array(ref))
+        return [hv.do((np.array(val))) for val in values]
 

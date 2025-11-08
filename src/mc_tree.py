@@ -16,14 +16,16 @@ from analyzer import Analyzer
 class MctsTree():
     """This class contains the mcts tree."""
 
-    def __init__(self, root: Node):
+    def __init__(self, root: Node, max_solutions: int = 10):
         """Init method for the MCTS tree.
 
         Args:
             root (Node): Root node for the tree
+            max_solutions (int): Maximum number of entries in pareto front
         """
         self._identifier = id(self)
         self._root = root
+        self._max_solutions = max_solutions
         # Force the multiprocess start method to be fork for later memory sharing
         mp.set_start_method("fork", force=True)
 
@@ -66,8 +68,35 @@ class MctsTree():
             # At this point we know that current_node is neither terminal nor has any expansion left
             # Safety check for children
             if current_node._children:
-                current_node = self.ucb_child_selection(current_node)
+                current_node = self.pareto_path_child_selection(current_node)
 
+    def pareto_path_child_selection(self, node: Node) -> Node:
+        """Method that selects children based on stored pareto paths
+
+        Args:
+            node (Node): Root node for child selection
+
+        Returns:
+            Node: Child node
+        """
+
+        # Check if there are pareto paths
+        if not node._pareto_paths:
+            return random.choice(node._children.values())
+        
+        values = [path[0][1] for path in node._pareto_paths]
+
+        hypervolumes = Helper.hypervolume(values)
+        full_hv = sum(hypervolumes)
+        weights = [hv/full_hv for hv in hypervolumes]
+        child_key_index = random.choices(range(len(hypervolumes)), weights, k=1)[0]
+        
+        
+        child_key = node._pareto_paths[child_key_index][-1][0]
+
+        return node._children[child_key]
+        
+        
 
     def ucb_child_selection(self, node: Node) -> Node:
         """Selects children based on pareto dominance of UCB1-Calculations
@@ -173,7 +202,7 @@ class MctsTree():
         Returns:
             bool: Does path one dominate path 2
         """
-        value_of_path1 = path1[-1][1] # Extracts value dict from last position in path
+        value_of_path1 = path1[-1][1] # Extracts value dict from current position in path
         value_of_path2 = path2[-1][1]
 
         a1, a2, a3 =value_of_path1["step_count"],value_of_path1["weight_shifted"],value_of_path1["distance_to_goal"]
@@ -218,20 +247,18 @@ class MctsTree():
                 for i, pareto_path in enumerate(current_node._pareto_paths):
                     if MctsTree.path_domination(pareto_path, path):
                         dominated = True
-                        break
                     if MctsTree.path_domination(path, pareto_path): # Case that existing path is dominated by new one
                         indices_to_remove.append(i)
 
                 indices_to_remove.reverse() # Reverse so biggest index is removed first later
 
-                if not dominated:
-                    if indices_to_remove:
+                if indices_to_remove:
                         for i in indices_to_remove:
                             current_node._pareto_paths.pop(i)
+
+                if not dominated and len(current_node._pareto_paths) < self._max_solutions:
                     current_node._pareto_paths.append(list(path))
 
-            if current_node._parent is None:
-                print(f"\n\nRoot pareto paths: {len(current_node._pareto_paths)}")
             
             last_node = current_node
             current_node = current_node._parent
@@ -256,7 +283,7 @@ class MctsTree():
                 # Expand the leaf (expand method automatically adds it to the current_nodes children and also returns it)
                 child = current_node.expand()
 
-                if child.is_terminal_state():
+                if child.is_terminal_state() and child not in solutions:
                     print("Found new solution")
                     solutions.append(child)
                 else:
@@ -274,3 +301,4 @@ class MctsTree():
                 current = current._parent
             path.reverse
             Analyzer.create_heatmap(solution._controller._environment._environment, solution._controller._start_pos, solution._controller._environment._goal, path)
+        Analyzer.visualize_mcts_svg(self._root, "./log/hurensohn.svg")
