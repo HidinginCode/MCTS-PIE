@@ -70,11 +70,14 @@ class Helper():
         return non_dominated_nodes
     
     @staticmethod
-    def hypervolume(points: list):
+    def hypervolume(points: list) -> tuple:
         """Returns the index of the value with the biggest hypervolume for the list of points provided.
 
         Args:
             points (list): List of HV per point
+        
+        Returns:
+            tuple: Hypervolumes and full HV as tuple
         """
         values = [list(point.values()) for point in points]
         #print(values)
@@ -85,5 +88,5 @@ class Helper():
         ref = worst + 0.1 * (ranges + 1e-12) # Add margin to worst point
 
         hv = HV.Hypervolume(ref_point=np.array(ref))
-        return [hv.do((np.array(val))) for val in values]
+        return ([hv.do((np.array(val))) for val in values], hv.do(np.array(values)))
 

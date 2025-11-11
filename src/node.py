@@ -6,7 +6,7 @@ import random
 class Node():
     """This node class is the basis for later building the MCTS tree."""
 
-    def __init__(self, controller: Controller, parent: Node | None = None):
+    def __init__(self, controller: Controller, parent: Node | None = None, last_move: tuple = None):
         """Init method for the node class that accepts a controller and a parent node.
 
         Args:
@@ -31,6 +31,8 @@ class Node():
                             "distance_to_goal": 0
                             }
         self._pareto_paths = [] # This holds action, movement and values like the following ((move_dir, action_dir), value_dict)
+        
+        self._last_move = last_move
 
     def clone(self) -> Node:
         """Clone method for node object.
@@ -45,6 +47,7 @@ class Node():
         new_node._values = dict(self._values)
         new_node._ucb_values = dict(self._ucb_values)
         new_node._pareto_paths = list(self._pareto_paths)
+        new_node._last_move = tuple(self._last_move)
 
         return new_node
 
@@ -151,11 +154,10 @@ class Node():
         Returns:
             Node: New child node
         """
-
         if self.get_untried_actions():
             move_pair = random.choice(self.get_untried_actions())
             move_dir, shift_dir = move_pair
-            child_node = Node(self._controller, self)
+            child_node = Node(self._controller, self, move_pair)
             child_node._controller.move(move_dir, shift_dir)
             # After move we load the new objective values into value dict
             child_node.refresh_values()

@@ -11,6 +11,7 @@ import random
 import numpy as np
 from tqdm import tqdm
 from analyzer import Analyzer
+import copy
 
 
 class MctsTree():
@@ -85,18 +86,12 @@ class MctsTree():
             return random.choice(node._children.values())
         
         values = [path[0][1] for path in node._pareto_paths]
-
-        hypervolumes = Helper.hypervolume(values)
-        full_hv = sum(hypervolumes)
+        hypervolumes, full_hv = Helper.hypervolume(values)
         weights = [hv/full_hv for hv in hypervolumes]
         child_key_index = random.choices(range(len(hypervolumes)), weights, k=1)[0]
-        
-        
         child_key = node._pareto_paths[child_key_index][-1][0]
 
         return node._children[child_key]
-        
-        
 
     def ucb_child_selection(self, node: Node) -> Node:
         """Selects children based on pareto dominance of UCB1-Calculations
@@ -213,55 +208,48 @@ class MctsTree():
             (a1 < b1 or a2 < b2 or a3 < b3)
         )
 
-    def backpropagate(self, node: Node) -> None:
-        """Backpropagates metrics from the new child node through the parents.
-        This makes the parents metrics an average of the metrics of their children.
+    def update_pareto_paths(self, node: Node, path: list):
+        """Updates the pareto front for a node.
 
         Args:
-            node (Node): Root of backpropagation
+            node (Node): Node to be updated
+            path (list): Path that is used for the update
         """
+        """Update Pareto front for a node."""
+        dominated = [p for p in node._pareto_paths if self.path_domination(path, p)]
+        if not any(self.path_domination(p, path) for p in node._pareto_paths):
+            node._pareto_paths = [p for p in node._pareto_paths if p not in dominated]
+            node._pareto_paths.append(copy.deepcopy(path))
 
-        last_node = None
-        current_node = node
-        values_of_leaf = node._values
+
+    def backpropagate(self, node: Node) -> None:
+        """Backpropagate leaf metrics up the tree."""
+        leaf_values = node._values.copy()
         path = []
-        while current_node is not None:
-            current_node._visits += 1
-            # Check if current node has any children
-            if current_node._children:
-                # Iterate over each key/value
-                for key in current_node._values:
-                    value = 0
-                    for child in current_node._children.values():
-                        value += child._values[key]
-                    value/=len(current_node._children)
-                    current_node._values[key] = value
+        current = node
 
-            # Append movement/shifting direction and values to path
-            if last_node is not None:
-                movement_pair = [key for key, value in current_node._children.items() if value is last_node][0]
-                path.append((movement_pair, values_of_leaf))
+        while current is not None:
+            current._visits += 1
 
-                indices_to_remove = []
-                dominated = False
-                for i, pareto_path in enumerate(current_node._pareto_paths):
-                    if MctsTree.path_domination(pareto_path, path):
-                        dominated = True
-                    if MctsTree.path_domination(path, pareto_path): # Case that existing path is dominated by new one
-                        indices_to_remove.append(i)
+            # Incremental average update
+            for key, val in leaf_values.items():
+                current._values[key] = (
+                    (current._values[key] * (current._visits - 1)) + val
+                ) / current._visits
+            move = current._last_move
 
-                indices_to_remove.reverse() # Reverse so biggest index is removed first later
+            # Each node knows the move that lead to it
+            # Save each move in path
+            # Ignore child since it does not need to know its own origin move in path
+            # Just append to path and go to parent
+            # Add path that contains child move to parents pareto front
+            # Add own origin move to path -> repeat till root
+            if current is not node: # Last node does not need to even have a pareto path since its a leaf
+                self.update_pareto_paths(current, path)
+            if current._last_move is not None:
+                path.append((move, leaf_values.copy()))
 
-                if indices_to_remove:
-                        for i in indices_to_remove:
-                            current_node._pareto_paths.pop(i)
-
-                if not dominated and len(current_node._pareto_paths) < self._max_solutions:
-                    current_node._pareto_paths.append(list(path))
-
-            
-            last_node = current_node
-            current_node = current_node._parent
+            current = current._parent
 
     def search(self, iterations: int) -> None:
         """Methods that builds the tree and looks for solutions
@@ -270,6 +258,8 @@ class MctsTree():
             iterations (int): Number of search iterations to complete
         """
 
+
+        print("Starting search ...")
         # Make list for found solutions
         solutions = []
 
@@ -301,4 +291,4 @@ class MctsTree():
                 current = current._parent
             path.reverse
             Analyzer.create_heatmap(solution._controller._environment._environment, solution._controller._start_pos, solution._controller._environment._goal, path)
-        Analyzer.visualize_mcts_svg(self._root, "./log/hurensohn.svg")
+        Analyzer.visualize_mcts_svg(self._root, "./log/tree.svg")
