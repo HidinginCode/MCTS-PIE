@@ -121,6 +121,48 @@ class MctsTree():
         pareto_front = Helper.determine_pareto_front_from_nodes(children.values(), True)
         return random.choice(pareto_front)
 
+    def iterative_heavy_distance_rollout(self, leaf: Node, simulations: int, maximum_moves: int):
+        """Iterative version of the heavy distance rollout to look into performance.
+
+        Args:
+            leaf (Node): Leaf to simulate
+            simulations (int): Number of iterative simulations
+            maximum_moves (int): Maximum number of moves per simulation
+        """
+        results = []
+        manhattan = lambda p, q: abs(p[0]-q[0]) + abs(p[1]-q[1])
+        for _ in range(simulations):
+            leaf_copy = leaf.clone()
+            controller = leaf_copy._controller
+            goal = controller._environment._goal
+
+            for _ in range(maximum_moves):
+                # Break if we reached terminal state
+                if leaf_copy.is_terminal_state():
+                    break
+
+                current_pos = controller._current_pos
+                # Get needed parts of calculation and prepare move list
+                current_distance_to_goal = manhattan(current_pos, goal)
+                distance_minimizing_moves = []
+                valid_moves = leaf_copy._controller.get_all_valid_pairs()
+                # Get moves that do not increase distance
+                for move_dir, shifting_dir in valid_moves:
+                    new_pos = (current_pos[0] + move_dir.value[0],
+                            current_pos[1] + move_dir.value[1])
+                    new_distance_to_goal = manhattan(new_pos, goal)
+                    if new_distance_to_goal <= current_distance_to_goal:
+                        distance_minimizing_moves.append((move_dir, shifting_dir))
+
+                # Randomly chose from moves
+                move_direction, shift_direction = random.choice(distance_minimizing_moves)
+                controller.move(move_direction, shift_direction)
+            results.append(leaf_copy.clone())
+        
+        chosen_node = random.choice(Helper.determine_pareto_front_from_nodes(results))
+        leaf._values = dict(chosen_node._values)
+
+
     def leaf_rollout(self, leaf: Node, simulations: int, maximum_moves: int, rollout_method: function) -> None:
         """Rollout method for a given leaf. 
         Acts more as a wrapper for the real multiprocessing rollouts.
@@ -277,7 +319,7 @@ class MctsTree():
                     print("Found new solution")
                     solutions.append(child)
                 else:
-                    self.leaf_rollout(child, 16, 100, self.multiprocess_heavy_distance_rollout)
+                    self.iterative_heavy_distance_rollout(child, 16, 100)
                     self.backpropagate(child)
         
 
