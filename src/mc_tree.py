@@ -29,6 +29,7 @@ class MctsTree():
         self._max_solutions = max_solutions
         # Force the multiprocess start method to be fork for later memory sharing
         mp.set_start_method("fork", force=True)
+        self._max_depth = 0
 
     @property
     def identifier(self) -> int:
@@ -69,10 +70,10 @@ class MctsTree():
             # At this point we know that current_node is neither terminal nor has any expansion left
             # Safety check for children
             if current_node._children:
-                current_node = self.pareto_path_child_selection(current_node)
+                current_node = self.pareto_path_child_selection_hv(current_node)
 
-    def pareto_path_child_selection(self, node: Node) -> Node:
-        """Method that selects children based on stored pareto paths
+    def pareto_path_child_selection_hv(self, node: Node) -> Node:
+        """Method that selects children based on stored pareto paths based on hypervolume.
 
         Args:
             node (Node): Root node for child selection
@@ -264,12 +265,16 @@ class MctsTree():
             node (Node): Node to be updated
             path (list): Path that is used for the update
         """
-        """Update Pareto front for a node."""
+
         dominated = [p for p in node._pareto_paths if self.path_domination(path, p)] # Get all paths from pareto paths that are dominated by the new one
         if not any(self.path_domination(p, path) for p in node._pareto_paths): # If there arent any paths in the pareto_paths that dominate the new path
             node._pareto_paths = [p for p in node._pareto_paths if p not in dominated]
-            node._pareto_paths.append(copy.deepcopy(path))
             node._paths_changed = True
+            node._pareto_paths.append(copy.deepcopy(path))
+            # Then prune for if too many paths using epsilon domination
+            if len(node._pareto_paths) > self._max_solutions and node._depth != 0: # We dont prune at root since we want accurate pareto front there
+                #print(f"Node at depth {node._depth} hat too many solutions, pruning ...")
+                Helper.epsilon_clustering(node, max_archive_size=self._max_solutions)
 
     def backpropagate(self, node: Node) -> None:
         """Backpropagate leaf metrics up the tree."""
@@ -320,24 +325,41 @@ class MctsTree():
             if current_node is not None:
                 # Expand the leaf (expand method automatically adds it to the current_nodes children and also returns it)
                 child = current_node.expand()
+                self._max_depth = child._depth
 
                 if child.is_terminal_state() and child not in solutions:
-                    print("Found new solution")
                     solutions.append(child)
                 else:
                     self.iterative_heavy_distance_rollout(child, 16, 100)
                     self.backpropagate(child)
-        
 
-        solutions = Helper.determine_pareto_front_from_nodes(solutions)
         for solution in solutions:
+            solution.refresh_values()
+        
+        print(f"Solutions before pruning: {len(solutions)}")
+        solutions = Helper.determine_pareto_front_from_nodes(solutions)
+        print(f"Solutions after pruning: {len(solutions)}")
+        for i, solution in enumerate(solutions):
             solution: Node
             current = solution
             path = []
+            shifts = []
+            moves = []
+
+            # Path reconstruction
+
             while current is not None:
                 path.append(current._controller._current_pos)
+                if current._last_move is not None:#
+                    moves.append(current._last_move)
+                    shifts.append(current._last_move[1].value)
                 current = current._parent
-            path.reverse
-            Analyzer.create_heatmap(solution._controller._environment._environment, solution._controller._start_pos, solution._controller._environment._goal, path)
-        if iterations < 20000:
-            Analyzer.visualize_mcts_svg(self._root, "./log/tree.svg")
+            
+            moves.reverse()
+            shifts.reverse()
+            path.reverse()
+
+            Analyzer.visualize_path_with_shifts(solution._controller._environment._environment, path, shifts, (0,0), solution._controller._environment._goal, f"./log/heatmap-{i}.png")
+            Analyzer.interactive_step_path(self.root._controller._environment, self.root._controller._start_pos, moves)
+        # if iterations < 20000:
+        #     Analyzer.visualize_mcts_svg(self._root, "./log/tree.svg")

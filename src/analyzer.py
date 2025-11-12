@@ -7,6 +7,10 @@ import time
 import os
 import math
 import networkx as nx
+import plotly.graph_objects as go
+import plotly.io as pio
+from controller import Controller
+from environment import Environment
 
 class Analyzer():
     """Class that is used to log and create visual data."""
@@ -78,6 +82,130 @@ class Analyzer():
 
         plt.savefig(f"./log/{time.time()}.png")
 
+    @staticmethod
+    def visualize_path_with_shifts(environment: np.ndarray,
+                                path: list[tuple[int, int]],
+                                shift_dirs: list[tuple[int, int]],
+                                start: tuple[int, int],
+                                goal: tuple[int, int] | None = None,
+                                save_path: str | None = None):
+        """Draw path (blue dots + white arrows) and shift dirs (cyan arrows) on gray heatmap.
+        Coordinate convention: (row, col). Both moves and shifts follow the same convention.
+        """
+        data = environment
+        nrows, ncols = data.shape
+
+        assert len(shift_dirs) == len(path) - 1, (
+            f"Expected {len(path) - 1} shift vectors for {len(path)} path points."
+        )
+
+        fig, ax = plt.subplots()
+        im = ax.imshow(data, cmap="gray_r", aspect="equal")
+        plt.colorbar(im, ax=ax)
+
+        # --- Highlight start and goal ---
+        for pos in [start] + ([goal] if goal else []):
+            r, c = pos
+            rect = patches.Rectangle((c - 0.5, r - 0.5), 1, 1,
+                                    linewidth=2, edgecolor='red', facecolor='none')
+            ax.add_patch(rect)
+
+        # --- Plot path dots ---
+        for (r, c) in path:
+            ax.plot(c, r, 'o', color='blue', markersize=5,
+                    markeredgecolor='black', markeredgewidth=1.0)
+
+        # --- Movement arrows (white) between path points ---
+        for (r1, c1), (r2, c2) in zip(path[:-1], path[1:]):
+            ax.arrow(c1, r1, c2 - c1, r2 - r1,
+                    head_width=0.25, head_length=0.25,
+                    fc='white', ec='black', linewidth=1.5,
+                    length_includes_head=True, alpha=0.9)
+
+        # --- Shift arrows (cyan, dashed) starting from 2nd node ---
+        for (r, c), (dr, dc) in zip(path[1:], shift_dirs):
+            r_target, c_target = r + dr, c + dc
+
+            # Clip to map bounds
+            if 0 <= r_target < nrows and 0 <= c_target < ncols:
+                ax.arrow(c, r, dc * 0.8, dr * 0.8,
+                        head_width=0.25, head_length=0.25,
+                        fc='cyan', ec='black', linewidth=1.2,
+                        linestyle='dashed', length_includes_head=True, alpha=0.9)
+            else:
+                # Optional: mark invalid shift with an X
+                ax.text(c, r, "×", color="red", ha="center", va="center", fontsize=8)
+
+        # --- Grid & labels ---
+        ax.set_xticks(np.arange(-0.5, ncols, 1))
+        ax.set_yticks(np.arange(-0.5, nrows, 1))
+        ax.grid(color='black', linestyle='-', linewidth=0.5)
+        ax.set_title("Path (white) & Shift (cyan) Directions — row/col convention")
+        ax.set_xticks(range(ncols))
+        ax.set_yticks(range(nrows))
+
+        # --- Save ---
+        if save_path is None:
+            save_path = f"./log/heatmap_{time.time():.0f}.png"
+        plt.savefig(save_path, bbox_inches='tight', dpi=300)
+        plt.close(fig)
+
+    @staticmethod
+    def interactive_step_path(environment: Environment, start_pos: tuple[int, int], moves: list[tuple[int, int]]):
+        """
+        Interactive environment stepper (row, col coordinates).
+        Press → to execute the next move via controller.move(direction_tuple).
+        The map updates after each move.
+        """
+
+        controller = Controller(environment, start_pos)
+
+        # --- Figure setup ---
+        fig, ax = plt.subplots()
+        im = ax.imshow(controller._environment._environment, cmap="gray_r", aspect="equal")
+        plt.colorbar(im, ax=ax)
+        ax.set_title("Press → to step through moves, Esc to quit")
+        ax.set_xticks(range(environment._environment.shape[1]))
+        ax.set_yticks(range(environment._environment.shape[0]))
+        ax.grid(color='black', linestyle='-', linewidth=0.5)
+        # NOTE: no invert_yaxis()
+
+        # --- Initial agent marker ---
+        r0, c0 = controller._current_pos  # row, col
+        agent_marker, = ax.plot([c0], [r0], 'o', color='red', markersize=8,
+                                markeredgecolor='black', markeredgewidth=1.2)
+
+        # --- State tracker ---
+        state = {"i": 0}
+
+        def update_plot():
+            """Redraw map and agent marker after a move."""
+            im.set_data(controller._environment._environment)
+
+            r, c = controller._current_pos  # (row, col)
+            agent_marker.set_data([c], [r])  # imshow plots col=x, row=y
+
+            ax.set_title(f"Step {state['i']}/{len(moves)} — Press → for next")
+            fig.canvas.draw_idle()
+
+        def on_key(event):
+            """Keyboard controls."""
+            if event.key == "right":
+                if state["i"] < len(moves):
+                    move_dir, shift_dir = moves[state["i"]]
+                    controller.move(move_dir, shift_dir)
+                    update_plot()
+                    state["i"] += 1
+                else:
+                    ax.set_title("End of move list reached.")
+                    fig.canvas.draw_idle()
+            elif event.key == "escape":
+                plt.close(fig)
+
+        # --- Bind events & show ---
+        fig.canvas.mpl_connect("key_press_event", on_key)
+        update_plot()
+        plt.show()
 
     @staticmethod
     def visualize_mcts_svg(

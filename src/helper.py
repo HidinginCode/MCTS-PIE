@@ -2,6 +2,7 @@
 from node import Node
 import numpy as np
 import pymoo.indicators.hv as HV
+import random
 
 class Helper():
     """Helper class with helper methods."""
@@ -89,4 +90,78 @@ class Helper():
 
         hv = HV.Hypervolume(ref_point=np.array(ref))
         return ([hv.do((np.array(val))) for val in values], hv.do(np.array(values)))
+
+    @staticmethod
+    def normalize_archive(archive: list[dict]) -> list[dict]:
+        """
+        Normalizes all objective values across an archive so that
+        each objective contributes equally to dominance comparisons.
+
+        Args:
+            archive (list[dict]): List of value dicts, e.g. from node._pareto_paths
+
+        Returns:
+            list[dict]: List of normalized dicts
+        """
+        # Collect all objective names
+        keys = list(archive[0].keys())
+        values = np.array([[d[k] for k in keys] for d in archive], dtype=float)
+
+        # Compute global min/max per objective
+        mins = values.min(axis=0)
+        maxs = values.max(axis=0)
+        ranges = np.where(maxs - mins == 0, 1.0, maxs - mins)  # avoid div by 0
+
+        # Normalize to [0, 1]
+        normalized_values = (values - mins) / ranges
+
+        # Rebuild list of dicts
+        normalized_archive = [
+            {k: float(v) for k, v in zip(keys, norm)}
+            for norm in normalized_values
+        ]
+        return normalized_archive
+
+    @staticmethod
+    def epsilon_clustering(node: Node, max_archive_size: int, eps: float = 0.0, eps_max: float = 1, eps_steps = 0.01):
+        """Method that uses epsilon clustering to prune the pareto path archive of a node.
+
+        Args:
+            node (Node): Node to prune
+            max_archive_size (int): Desired archive size.
+            eps (float, optional): Epsilon value. Defaults to 0.0.
+            eps_max (float, optional): Maximum epsilon value. Defaults to 1.
+            eps_steps (float, optional): Epsilon step size. Defaults to 0.01.
+        """
+        
+        current = list(node._pareto_paths)
+        iteration = 0
+        value_dicts = [path[-1][1] for path in current]
+        normalized_dicts = Helper.normalize_archive(value_dicts)
+
+        while len(current) > max_archive_size and eps <= eps_max:
+            # Normalize all path value dicts for fair scaling
+
+            # Assign each path to epsilon grid cell
+            archive = {}
+            for path, norm_dict in zip(current, normalized_dicts):
+                values = np.array(list(norm_dict.values()))
+                cell = tuple(np.floor(values / eps).astype(int))
+
+                if cell not in archive:
+                    archive[cell] = path
+                else:
+                    # Keep the representative with smaller total objective sum
+                    old_values = np.array(list(archive[cell][0][1].values()))
+                    new_values = np.array(list(path[0][1].values()))
+                    if np.sum(new_values) < np.sum(old_values):
+                        archive[cell] = path
+
+            current = list(archive.values())
+            iteration += 1
+            eps += eps_steps
+
+        node._pareto_paths = current
+
+
 

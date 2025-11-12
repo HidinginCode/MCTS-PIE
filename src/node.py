@@ -33,6 +33,7 @@ class Node():
         self._pareto_paths = [] # This holds action, movement and values like the following ((move_dir, action_dir), value_dict)
         self._paths_changed = False # This is for recomputation of HV to make an if statement (if paths_changed update else dont)
         self._old_hv_values = [] # Here old HV values are stored when a recomputation is not necessary. Structure is: ([contrib hv 1, contrib hv 2, ...], full HV)
+        self._old_epsilon_candidate = None # Here the last candidate for epsilon domination is stored
 
         self._last_move = last_move
 
@@ -51,6 +52,7 @@ class Node():
         new_node._pareto_paths = list(self._pareto_paths)
         new_node._last_move = tuple(self._last_move)
         new_node._paths_changed = bool(self._paths_changed)
+        new_node._old_epsilon_candidate = self._old_epsilon_candidate
 
         return new_node
 

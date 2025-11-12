@@ -3,3 +3,5 @@ networkx
 matplotlib
 tqdm
 pymoo
+snakeviz
+plotly

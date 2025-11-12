@@ -150,6 +150,7 @@ class Controller():
 
         # If one of both positions is invalid return false
         if not (self.is_valid_positon(new_pos) and self.is_valid_positon(new_shift_pos)):
+            print("INVALID MOVE " * 100)
             return False
 
         # Move agent to new position, increase steps and calculate new distance to goal
@@ -177,28 +178,24 @@ class Controller():
         return valid_pairs
 
     def is_valid_pair(self, pair: tuple[Direction, Direction]) -> bool:
-        """Check if a movement and shifiting direction pair is valid.
-
-        Args:
-            pair (tuple[Direction, Direction]): Movement and shifting direction pair.
-
-        Returns:
-            bool: Valid or not
-        """
+        """Check if a movement and shifting direction pair is valid."""
         move_dir, shift_dir = pair
-        x, y = self.current_pos
-        dx, dy = move_dir.value
-        new_pos = (x + dx, y + dy)
+        dim = self._environment._env_dim
+        x, y = self._current_pos
 
-        # Calculate shifting position after move
-        dx_shift, dy_shift = shift_dir.value
-        x_move, y_move = new_pos
-        new_shift_pos = (x_move + dx_shift, y_move + dy_shift)
+        # Apply move
+        dx_m, dy_m = move_dir.value
+        x_m, y_m = x + dx_m, y + dy_m
 
-        if not (self.is_valid_positon(new_pos) and self.is_valid_positon(new_shift_pos)):
-            return False
-        
-        return True
+        # Apply shift after move
+        dx_s, dy_s = shift_dir.value
+        x_s, y_s = x_m + dx_s, y_m + dy_s
+
+        # Inline boundary checks (avoid function calls)
+        return (
+            0 <= x_m < dim and 0 <= y_m < dim and
+            0 <= x_s < dim and 0 <= y_s < dim
+        )
 
     def is_valid_positon(self, position: tuple) -> bool:
         """Checks if position is inside the map bounds.
@@ -210,11 +207,10 @@ class Controller():
             bool: Is position valid or not
         """
 
-        for coordinate in position:
-            if coordinate < 0 or coordinate >= self.environment.env_dim:
-                return False
+        dim = self._environment._env_dim
+        x, y = position
         
-        return True
+        return 0 <= x < dim and 0 <= y < dim
 
     def calculate_distance_to_goal(self) -> float:
         """Calculates the Manhattan distance to the goal from the current position.

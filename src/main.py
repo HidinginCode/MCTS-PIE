@@ -28,11 +28,11 @@ def main():
     controller = Controller(environment=test_env)
     root_node = Node(controller=controller)
 
-    tree = MctsTree(root=root_node, max_solutions=6)
+    tree = MctsTree(root=root_node, max_solutions=20)
 
     print("Starting MCTS ...")
 
-    tree.search(50000)
+    tree.search(10000)
     # paths = moa_star.moa_star((0,0), (4,4), 5, moa_star.heuristic)
     # for path in paths: 
     #     path.reverse()
