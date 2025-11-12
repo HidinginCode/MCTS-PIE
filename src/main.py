@@ -24,15 +24,15 @@ def main():
         shutil.rmtree("./log")
     os.mkdir("./log")
 
-    test_env = Environment(env_dim=4, goal=(3,3))
+    test_env = Environment(env_dim=10, goal=(9,9))
     controller = Controller(environment=test_env)
     root_node = Node(controller=controller)
 
-    tree = MctsTree(root=root_node, max_solutions=10)
+    tree = MctsTree(root=root_node, max_solutions=6)
 
     print("Starting MCTS ...")
 
-    tree.search(2000)
+    tree.search(50000)
     # paths = moa_star.moa_star((0,0), (4,4), 5, moa_star.heuristic)
     # for path in paths: 
     #     path.reverse()

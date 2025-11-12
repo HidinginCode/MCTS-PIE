@@ -85,8 +85,16 @@ class MctsTree():
         if not node._pareto_paths:
             return random.choice(node._children.values())
         
-        values = [path[0][1] for path in node._pareto_paths]
-        hypervolumes, full_hv = Helper.hypervolume(values)
+        if node._paths_changed:
+            values = [path[0][1] for path in node._pareto_paths]
+            hypervolumes, full_hv = Helper.hypervolume(values)
+            # Since paths changed we save new hypervolumes
+            node._old_hv_values = (hypervolumes, full_hv)
+            #print(f"Node old hv values: {node._old_hv_values}")
+            node._paths_changed = False
+        else:
+            hypervolumes, full_hv = node._old_hv_values
+
         weights = [hv/full_hv for hv in hypervolumes]
         child_key_index = random.choices(range(len(hypervolumes)), weights, k=1)[0]
         child_key = node._pareto_paths[child_key_index][-1][0]
@@ -161,7 +169,6 @@ class MctsTree():
         
         chosen_node = random.choice(Helper.determine_pareto_front_from_nodes(results))
         leaf._values = dict(chosen_node._values)
-
 
     def leaf_rollout(self, leaf: Node, simulations: int, maximum_moves: int, rollout_method: function) -> None:
         """Rollout method for a given leaf. 
@@ -258,11 +265,11 @@ class MctsTree():
             path (list): Path that is used for the update
         """
         """Update Pareto front for a node."""
-        dominated = [p for p in node._pareto_paths if self.path_domination(path, p)]
-        if not any(self.path_domination(p, path) for p in node._pareto_paths):
+        dominated = [p for p in node._pareto_paths if self.path_domination(path, p)] # Get all paths from pareto paths that are dominated by the new one
+        if not any(self.path_domination(p, path) for p in node._pareto_paths): # If there arent any paths in the pareto_paths that dominate the new path
             node._pareto_paths = [p for p in node._pareto_paths if p not in dominated]
             node._pareto_paths.append(copy.deepcopy(path))
-
+            node._paths_changed = True
 
     def backpropagate(self, node: Node) -> None:
         """Backpropagate leaf metrics up the tree."""
@@ -300,7 +307,6 @@ class MctsTree():
             iterations (int): Number of search iterations to complete
         """
 
-
         print("Starting search ...")
         # Make list for found solutions
         solutions = []
@@ -333,4 +339,5 @@ class MctsTree():
                 current = current._parent
             path.reverse
             Analyzer.create_heatmap(solution._controller._environment._environment, solution._controller._start_pos, solution._controller._environment._goal, path)
-        Analyzer.visualize_mcts_svg(self._root, "./log/tree.svg")
+        if iterations < 20000:
+            Analyzer.visualize_mcts_svg(self._root, "./log/tree.svg")
