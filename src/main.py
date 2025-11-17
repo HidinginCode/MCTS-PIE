@@ -32,7 +32,7 @@ def main():
 
     print("Starting MCTS ...")
 
-    tree.search(10000)
+    tree.search(100000)
     # paths = moa_star.moa_star((0,0), (4,4), 5, moa_star.heuristic)
     # for path in paths: 
     #     path.reverse()

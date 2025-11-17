@@ -369,6 +369,9 @@ class MctsTree():
                     if child not in solutions:
                         print(f"Found new solution at depth: {child._depth}")
                         solutions.append(child)
+                        print(f"Len before pruning: {len(solutions)}")
+                        solutions = Helper.determine_pareto_front_from_nodes(solutions)
+                        print(f"Len after pruning: {len(solutions)}")
                     else:
                         print(f"Found already known solution at depth {child._depth}")
                     continue

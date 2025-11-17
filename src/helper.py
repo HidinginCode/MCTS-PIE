@@ -33,22 +33,22 @@ class Helper():
 
             if not ucb_flag:
                 return (
-                    (node1._values["step_count"] <= node2._values["step_count"]) and
-                    (node1._values["weight_shifted"] <= node2._values["weight_shifted"]) and
-                    (node1._values["distance_to_goal"] <= node2._values["distance_to_goal"]) and
-                    ((node1._values["step_count"] < node2._values["step_count"]) or
-                    (node1._values["weight_shifted"] < node2._values["weight_shifted"]) or
-                    (node1._values["distance_to_goal"] < node2._values["distance_to_goal"])
+                    (node2._values["step_count"] <= node1._values["step_count"]) and
+                    (node2._values["weight_shifted"] <= node1._values["weight_shifted"]) and
+                    (node2._values["distance_to_goal"] <= node1._values["distance_to_goal"]) and
+                    ((node2._values["step_count"] < node1._values["step_count"]) or
+                    (node2._values["weight_shifted"] < node1._values["weight_shifted"]) or
+                    (node2._values["distance_to_goal"] < node1._values["distance_to_goal"])
                     )
                 )
             
             return (
-                (node1._ucb_values["step_count"] <= node2._ucb_values["step_count"]) and
-                (node1._ucb_values["weight_shifted"] <= node2._ucb_values["weight_shifted"]) and
-                (node1._ucb_values["distance_to_goal"] <= node2._ucb_values["distance_to_goal"]) and
-                ((node1._ucb_values["step_count"] < node2._ucb_values["step_count"]) or
-                (node1._ucb_values["weight_shifted"] < node2._ucb_values["weight_shifted"]) or
-                (node1._ucb_values["distance_to_goal"] < node2._ucb_values["distance_to_goal"])
+                (node2._ucb_values["step_count"] <= node1._ucb_values["step_count"]) and
+                (node2._ucb_values["weight_shifted"] <= node1._ucb_values["weight_shifted"]) and
+                (node2._ucb_values["distance_to_goal"] <= node1._ucb_values["distance_to_goal"]) and
+                ((node2._ucb_values["step_count"] < node1._ucb_values["step_count"]) or
+                (node2._ucb_values["weight_shifted"] < node1._ucb_values["weight_shifted"]) or
+                (node2._ucb_values["distance_to_goal"] < node1._ucb_values["distance_to_goal"])
                 )
             )
 
