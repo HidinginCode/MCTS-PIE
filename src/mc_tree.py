@@ -70,7 +70,45 @@ class MctsTree():
             # At this point we know that current_node is neither terminal nor has any expansion left
             # Safety check for children
             if current_node._children:
-                current_node = self.pareto_path_child_selection_hv(current_node)
+                current_node = self.pareto_path_child_selection_cd(current_node)
+
+    def pareto_path_child_selection_cd(self, node: Node) -> Node:
+        """Method that selects a child from pareto_paths using the crowding distance.
+
+        Args:
+            node (Node): Node of which to select a child
+
+        Returns:
+            Node: Chosen child.
+        """
+        if not node._pareto_paths:
+            return random.choice(node._children.values())
+        
+        values = [path[0][1] for path in node._pareto_paths]
+        crowding_distances = Helper.crowding_distance(values)
+
+        # If front changed calculate new crowding distance
+        if node._paths_changed:
+            values = [path[0][1] for path in node._pareto_paths]
+            crowding_distances = Helper.crowding_distance(values)
+
+        total = sum(v for v in crowding_distances if v != np.inf) * 2 # The times 2 because we allocate 50% weight overall to the extreme points
+        
+        # Guard against division by 0
+        if total == 0:
+            total = 1
+        
+        weights = []
+        for cd in crowding_distances:
+            if cd == np.inf:
+                weights.append(0.25)
+            else:
+                weights.append(cd/total)
+        
+        child_key_index = random.choices(range(len(crowding_distances)), weights, k=1)[0]
+        child_key = node._pareto_paths[child_key_index][-1][0]
+
+        return node._children[child_key]
 
     def pareto_path_child_selection_hv(self, node: Node) -> Node:
         """Method that selects children based on stored pareto paths based on hypervolume.

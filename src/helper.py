@@ -163,5 +163,46 @@ class Helper():
 
         node._pareto_paths = current
 
+    @staticmethod
+    def crowding_distance(points: list) -> list:
+        """Method that calculates crowding distances for a list of points.
+
+        Args:
+            points (list): Points to calculate crowding distances.
+
+        Returns:
+            list: List of crowding distances.
+        """
+        front = np.array([[value for value in point.values()] for point in points])
+        N, M = front.shape
+        distances = np.zeros(N)
+
+        # Mask for extreme points
+        inf_mask = np.zeros(N, dtype=bool)
+
+        for m in range(M):
+            idx = np.argsort(front[:, m])
+            sorted_front = front[idx, m]
+
+            # Mark boundary points
+            inf_mask[idx[0]] = True
+            inf_mask[idx[-1]] = True
+
+            # Normalize objective values (avoid division by zero)
+            min_m = sorted_front[0]
+            max_m = sorted_front[-1]
+            denom = max_m - min_m
+            if denom == 0:
+                continue
+
+            # Compute normalized distance contribution
+            diff = (sorted_front[2:] - sorted_front[:-2]) / denom
+
+            # Add distances to inner points
+            distances[idx[1:-1]] += diff
+
+
+        distances[inf_mask] = np.inf
+        return distances.tolist()
 
 
