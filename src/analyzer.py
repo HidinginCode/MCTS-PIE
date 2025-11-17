@@ -11,6 +11,9 @@ import plotly.graph_objects as go
 import plotly.io as pio
 from controller import Controller
 from environment import Environment
+from PIL import Image
+import tempfile
+import os
 
 class Analyzer():
     """Class that is used to log and create visual data."""
@@ -335,3 +338,73 @@ class Analyzer():
         plt.axis("off")
         plt.savefig(filename, format="svg", bbox_inches="tight")
         plt.close()
+    
+    @staticmethod
+    def save_path_as_gif(environment: Environment,
+                        start_pos: tuple[int, int],
+                        moves: list[tuple[int, int]],
+                        gif_path: str = "path.gif",
+                        frame_duration: int = 300):
+        """
+        Automatically step through the path and save the visualization as a GIF.
+        frame_duration = milliseconds per frame in the gif.
+        """
+
+
+        controller = Controller(environment, start_pos)
+
+        # --- setup ---
+        fig, ax = plt.subplots()
+        im = ax.imshow(controller._environment._environment, cmap="gray_r", aspect="equal")
+        ax.set_xticks(range(environment._environment.shape[1]))
+        ax.set_yticks(range(environment._environment.shape[0]))
+        ax.grid(color='black', linestyle='-', linewidth=0.5)
+        plt.tight_layout()
+
+        # initial agent marker
+        r0, c0 = controller._current_pos
+        agent_marker, = ax.plot([c0], [r0], 'o', color='red', markersize=8,
+                                markeredgecolor='black', markeredgewidth=1.2)
+
+        frames = []
+        tmpdir = tempfile.mkdtemp()
+
+        def save_frame(step: int):
+            ax.set_title(f"Step {step}/{len(moves)}")
+            fig.canvas.draw()
+
+            frame_path = os.path.join(tmpdir, f"frame_{step:05d}.png")
+            fig.savefig(frame_path, dpi=120)
+            frames.append(frame_path)
+
+        # save initial state
+        save_frame(0)
+
+        # --- iterate through moves ---
+        for i, (move_dir, shift_dir) in enumerate(moves, start=1):
+            controller.move(move_dir, shift_dir)
+
+            # update map image + agent marker
+            im.set_data(controller._environment._environment)
+            r, c = controller._current_pos
+            agent_marker.set_data([c], [r])
+
+            save_frame(i)
+
+        plt.close(fig)
+
+        # --- Assemble GIF ---
+        images = [Image.open(f) for f in frames]
+        images[0].save(
+            gif_path,
+            save_all=True,
+            append_images=images[1:],
+            duration=frame_duration,
+            loop=0
+        )
+
+        # cleanup temporary image files
+        for f in frames:
+            os.remove(f)
+
+        return gif_path

@@ -123,7 +123,7 @@ class Helper():
         return normalized_archive
 
     @staticmethod
-    def epsilon_clustering(node: Node, max_archive_size: int, eps: float = 0.0, eps_max: float = 1, eps_steps = 0.01):
+    def epsilon_clustering(node: Node, max_archive_size: int, eps: float = 1e-4, eps_max: float = 1, eps_steps = 0.001):
         """Method that uses epsilon clustering to prune the pareto path archive of a node.
 
         Args:

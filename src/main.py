@@ -24,7 +24,7 @@ def main():
         shutil.rmtree("./log")
     os.mkdir("./log")
 
-    test_env = Environment(env_dim=10, goal=(9,9))
+    test_env = Environment(env_dim=5, goal=(4,4))
     controller = Controller(environment=test_env)
     root_node = Node(controller=controller)
 

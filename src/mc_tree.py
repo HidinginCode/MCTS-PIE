@@ -327,10 +327,15 @@ class MctsTree():
                 child = current_node.expand()
                 self._max_depth = child._depth
 
-                if child.is_terminal_state() and child not in solutions:
-                    solutions.append(child)
+                if child.is_terminal_state():
+                    if child not in solutions:
+                        print(f"Found new solution at depth: {child._depth}")
+                        solutions.append(child)
+                    else:
+                        print(f"Found already known solution at depth {child._depth}")
+                    continue
                 else:
-                    self.iterative_heavy_distance_rollout(child, 16, 100)
+                    self.iterative_heavy_distance_rollout(child, 16, 500)
                     self.backpropagate(child)
 
         for solution in solutions:
@@ -360,6 +365,7 @@ class MctsTree():
             path.reverse()
 
             Analyzer.visualize_path_with_shifts(solution._controller._environment._environment, path, shifts, (0,0), solution._controller._environment._goal, f"./log/heatmap-{i}.png")
-            Analyzer.interactive_step_path(self.root._controller._environment, self.root._controller._start_pos, moves)
+            Analyzer.save_path_as_gif(self.root._controller._environment, self.root._controller._start_pos, moves, f"./log/heatmap-{i}.gif")
+            #Analyzer.interactive_step_path(self.root._controller._environment, self.root._controller._start_pos, moves)
         # if iterations < 20000:
         #     Analyzer.visualize_mcts_svg(self._root, "./log/tree.svg")
