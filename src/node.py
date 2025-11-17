@@ -34,7 +34,7 @@ class Node():
         self._paths_changed = False # This is for recomputation of HV to make an if statement (if paths_changed update else dont)
         self._old_hv_values = [] # Here old HV values are stored when a recomputation is not necessary. Structure is: ([contrib hv 1, contrib hv 2, ...], full HV)
         self._old_epsilon_candidate = None # Here the last candidate for epsilon domination is stored
-
+        self._old_cd_values = [] # Here old CD values are stored so that recomputation is not necessary
         self._last_move = last_move
 
     def clone(self) -> Node:
@@ -53,6 +53,7 @@ class Node():
         new_node._last_move = tuple(self._last_move)
         new_node._paths_changed = bool(self._paths_changed)
         new_node._old_epsilon_candidate = self._old_epsilon_candidate
+        new_node._old_cd_values = self._old_cd_values
 
         return new_node
 

@@ -83,14 +83,15 @@ class MctsTree():
         """
         if not node._pareto_paths:
             return random.choice(node._children.values())
-        
-        values = [path[0][1] for path in node._pareto_paths]
-        crowding_distances = Helper.crowding_distance(values)
 
         # If front changed calculate new crowding distance
         if node._paths_changed:
+            node._paths_changed = False
             values = [path[0][1] for path in node._pareto_paths]
             crowding_distances = Helper.crowding_distance(values)
+            node._old_cd_values = crowding_distances
+        else:
+            crowding_distances = node._old_cd_values
 
         total = sum(v for v in crowding_distances if v != np.inf) * 2 # The times 2 because we allocate 50% weight overall to the extreme points
         
