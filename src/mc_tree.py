@@ -227,30 +227,6 @@ class MctsTree():
         chosen_node = random.choice(Helper.determine_pareto_front_from_nodes(results))
         leaf._values = dict(chosen_node._values)
 
-    def leaf_rollout(self, leaf: Node, simulations: int, maximum_moves: int, rollout_method: function) -> None:
-        """Rollout method for a given leaf. 
-        Acts more as a wrapper for the real multiprocessing rollouts.
-
-        Args:
-            leaf (Node): Leaf to be rolled out
-            simulations (int): Number of simultaneous simulations
-            maximum_moves (int): Maximum number of moves per simulation
-            rollout_method (function): Rollout function to be used
-        """
-
-        
-        MctsTree.SHARED_NODE = leaf
-        number_of_processes = min(os.cpu_count(), simulations)
-        with mp.Pool(processes=number_of_processes) as p:
-            it = p.imap_unordered(rollout_method, [maximum_moves]*number_of_processes)
-            results = list(it)
-        
-        if results:
-            chosen_node = random.choice(Helper.determine_pareto_front_from_nodes(results))
-            leaf._values = dict(chosen_node._values)
-        else:
-            raise RuntimeError("Leaf rollout returned no results")
-
     @staticmethod
     def path_domination(path1: list, path2: list) -> bool:
         """Returns if path1 dominates path2, using the last value entry of the paths.
