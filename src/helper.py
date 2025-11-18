@@ -2,7 +2,6 @@
 from node import Node
 import numpy as np
 import pymoo.indicators.hv as HV
-import random
 
 class Helper():
     """Helper class with helper methods."""

@@ -27,8 +27,6 @@ class MctsTree():
         self._identifier = id(self)
         self._root = root
         self._max_solutions = max_solutions
-        # Force the multiprocess start method to be fork for later memory sharing
-        mp.set_start_method("fork", force=True)
         self._max_depth = 0
 
     @property
@@ -149,7 +147,6 @@ class MctsTree():
 
         Returns:
             Node: Child node
-        TODO: Figure out other selection than random choice (Hypervolume, Crowding-Distance,...)
         """
         children = node._children
         number_of_children = len(children)
@@ -178,11 +175,31 @@ class MctsTree():
             maximum_moves (int): Maximum number of moves per simulation
         """
         results = []
-        manhattan = lambda p, q: abs(p[0]-q[0]) + abs(p[1]-q[1])
+        manhattan = lambda p, q: abs(p[0] - q[0]) + abs(p[1] - q[1])
+
         for _ in range(simulations):
             leaf_copy = leaf.clone()
             controller = leaf_copy._controller
+            start = controller._start_pos
             goal = controller._environment._goal
+
+            # Precompute constant
+            dxg = start[0] - goal[0]
+            dyg = start[1] - goal[1]
+            roundtrip_back = (dxg if dxg >= 0 else -dxg) + (dyg if dyg >= 0 else -dyg)
+
+            def distance(pos):
+                """Nested manhattan distance roundtrip function for speed."""
+                x, y = pos
+                if not controller._goal_collected:
+                    d1 = x - goal[0]
+                    d2 = y - goal[1]
+                    dist_to_goal = (d1 if d1 >= 0 else -d1) + (d2 if d2 >= 0 else -d2)
+                    return dist_to_goal + roundtrip_back
+                else:
+                    d1 = x - start[0]
+                    d2 = y - start[1]
+                    return (d1 if d1 >= 0 else -d1) + (d2 if d2 >= 0 else -d2)
 
             for _ in range(maximum_moves):
                 # Break if we reached terminal state
@@ -191,14 +208,14 @@ class MctsTree():
 
                 current_pos = controller._current_pos
                 # Get needed parts of calculation and prepare move list
-                current_distance_to_goal = manhattan(current_pos, goal)
+                current_distance_to_goal = distance(current_pos)
                 distance_minimizing_moves = []
                 valid_moves = leaf_copy._controller.get_all_valid_pairs()
                 # Get moves that do not increase distance
                 for move_dir, shifting_dir in valid_moves:
                     new_pos = (current_pos[0] + move_dir.value[0],
                             current_pos[1] + move_dir.value[1])
-                    new_distance_to_goal = manhattan(new_pos, goal)
+                    new_distance_to_goal = distance(new_pos)
                     if new_distance_to_goal <= current_distance_to_goal:
                         distance_minimizing_moves.append((move_dir, shifting_dir))
 
@@ -233,47 +250,6 @@ class MctsTree():
             leaf._values = dict(chosen_node._values)
         else:
             raise RuntimeError("Leaf rollout returned no results")
-
-    @staticmethod
-    def multiprocess_heavy_distance_rollout(maximum_moves: int) -> Node:
-        """Heavy rollout for leaf simulation.
-        Moves are selected by either decreasing or staying at the same distance to the goal.
-
-        Args:
-            maximum_moves (int): Number of maximum moves till break
-
-        Returns:leaf_copy = Node(McTree.SHARED_NODE.state.clone(), None)
-            Node: Simulated node
-        """
-
-        leaf_copy = MctsTree.SHARED_NODE.clone()
-        leaf_copy._parent = None
-        controller = leaf_copy._controller
-        goal = controller._environment._goal
-        manhattan = lambda p, q: abs(p[0]-q[0]) + abs(p[1]-q[1])
-
-        for _ in range(maximum_moves):
-            # Break if we reached terminal state
-            if leaf_copy.is_terminal_state():
-                break
-
-            current_pos = controller._current_pos
-            # Get needed parts of calculation and prepare move list
-            current_distance_to_goal = manhattan(current_pos, goal)
-            distance_minimizing_moves = []
-            valid_moves = leaf_copy._controller.get_all_valid_pairs()
-            # Get moves that do not increase distance
-            for move_dir, shifting_dir in valid_moves:
-                new_pos = (current_pos[0] + move_dir.value[0],
-                           current_pos[1] + move_dir.value[1])
-                new_distance_to_goal = manhattan(new_pos, goal)
-                if new_distance_to_goal <= current_distance_to_goal:
-                    distance_minimizing_moves.append((move_dir, shifting_dir))
-
-            # Randomly chose from moves
-            move_direction, shift_direction = random.choice(distance_minimizing_moves)
-            controller.move(move_direction, shift_direction)
-        return leaf_copy
 
     @staticmethod
     def path_domination(path1: list, path2: list) -> bool:
@@ -377,15 +353,12 @@ class MctsTree():
                         print(f"Found already known solution at depth {child._depth}")
                     continue
                 else:
-                    self.iterative_heavy_distance_rollout(child, 16, 500)
+                    self.iterative_heavy_distance_rollout(child, 16, 100)
                     self.backpropagate(child)
 
         for solution in solutions:
             solution.refresh_values()
-        
-        print(f"Solutions before pruning: {len(solutions)}")
-        solutions = Helper.determine_pareto_front_from_nodes(solutions)
-        print(f"Solutions after pruning: {len(solutions)}")
+
         for i, solution in enumerate(solutions):
             solution: Node
             current = solution

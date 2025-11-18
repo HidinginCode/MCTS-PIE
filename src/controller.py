@@ -20,6 +20,7 @@ class Controller():
         self._current_pos = tuple(start_pos)
         self._step_count = 0
         self._weight_shifted = 0.0
+        self._goal_collected = False
         self._distance_to_goal = self.calculate_distance_to_goal()
 
     def clone(self) -> Controller:
@@ -34,6 +35,7 @@ class Controller():
         clone_controller._step_count = int(self._step_count)
         clone_controller._weight_shifted = float(self._weight_shifted)
         clone_controller._distance_to_goal = float(self._distance_to_goal)
+        clone_controller._goal_collected = bool(self._goal_collected)
         return clone_controller
 
     @property
@@ -156,12 +158,14 @@ class Controller():
         # Move agent to new position, increase steps and calculate new distance to goal
         self._current_pos = new_pos
         self._step_count = self._step_count+1
+        if self._current_pos == self._environment._goal:
+            self._goal_collected = True
         self._distance_to_goal = self.calculate_distance_to_goal()
 
         # Shift weight, increase weight shifted, remove weight from old position
-        self._environment._environment[new_shift_pos] += self._environment._environment[new_pos]
-        self._weight_shifted += self._environment._environment[new_pos]
-        self._environment._environment[new_pos] = 0
+        self._environment._environment[new_shift_pos[0]][new_shift_pos[1]] += self._environment._environment[new_pos[0]][new_pos[1]]
+        self._weight_shifted += self._environment._environment[new_pos[0]][new_pos[1]]
+        self._environment._environment[new_pos[0]][new_pos[1]] = 0
 
     def get_all_valid_pairs(self) -> list[tuple]:
         """Returns a list of all valid movement and shfiting directions pairs at the current position.
@@ -170,11 +174,36 @@ class Controller():
             list[tuple]: List of valid pairs.
         """
         valid_pairs = []
-        for move_dir in Direction:
-            for shift_dir in Direction:
-                if self.is_valid_pair((move_dir, shift_dir)):
-                    valid_pairs.append((move_dir, shift_dir))
-        
+
+        cx, cy = self._current_pos
+        dim = self._environment._env_dim
+
+        dirs = tuple(Direction)
+        dir_vals = [d.value for d in dirs]
+
+        # Outer loop: movement direction
+        for i, (dx_m, dy_m) in enumerate(dir_vals):
+            x_m = cx + dx_m
+            y_m = cy + dy_m
+
+            # bounds check #1
+            if x_m < 0 or x_m >= dim or y_m < 0 or y_m >= dim:
+                continue
+
+            move_dir = dirs[i]  # retrieve Enum only once
+
+            # Inner loop: shifting direction
+            for j, (dx_s, dy_s) in enumerate(dir_vals):
+                x_s = x_m + dx_s
+                y_s = y_m + dy_s
+
+                # bounds check #2
+                if x_s < 0 or x_s >= dim or y_s < 0 or y_s >= dim:
+                    continue
+
+                shift_dir = dirs[j]
+                valid_pairs.append((move_dir, shift_dir))
+
         return valid_pairs
 
     def is_valid_pair(self, pair: tuple[Direction, Direction]) -> bool:
@@ -218,4 +247,21 @@ class Controller():
         Returns:
             float: Manhattan distance to goal
         """
-        return abs(self._current_pos[0] - self._environment._goal[0]) + abs(self._current_pos[1] - self._environment._goal[1])
+        current_pos = self._current_pos
+        goal = self._environment._goal
+        start = self._start_pos
+        goal_collected = self._goal_collected
+
+        # Manual Manhattan dist (faster than lambda + tuple unpack)
+        dx1 = current_pos[0] - goal[0]
+        dy1 = current_pos[1] - goal[1]
+        dist_to_goal = (dx1 if dx1 >= 0 else -dx1) + (dy1 if dy1 >= 0 else -dy1)
+
+        if not goal_collected:
+            dx2 = start[0] - goal[0]
+            dy2 = start[1] - goal[1]
+            return dist_to_goal + (dx2 if dx2 >= 0 else -dx2) + (dy2 if dy2 >= 0 else -dy2)
+        else:
+            dx3 = current_pos[0] - start[0]
+            dy3 = current_pos[1] - start[1]
+            return (dx3 if dx3 >= 0 else -dx3) + (dy3 if dy3 >= 0 else -dy3)

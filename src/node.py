@@ -43,17 +43,25 @@ class Node():
         Returns:
             Node: Cloned node
         """
-        new_node = Node(self._controller, self._parent)
-        new_node._depth = int(self._depth)
-        new_node._children = self._children
-        new_node._visits = int(self._visits)
-        new_node._values = dict(self._values)
-        new_node._ucb_values = dict(self._ucb_values)
-        new_node._pareto_paths = list(self._pareto_paths)
-        new_node._last_move = tuple(self._last_move)
+        # No need to be copied
+        new_node = Node(self._controller, None)
+        new_node._depth = self._depth
+        new_node._visits = self._visits
+        new_node._last_move = self._last_move
         new_node._paths_changed = bool(self._paths_changed)
         new_node._old_epsilon_candidate = self._old_epsilon_candidate
         new_node._old_cd_values = self._old_cd_values
+
+        # Copy
+        new_node._values = self._values.copy()
+        new_node._ucb_values = self._ucb_values.copy()
+
+
+        new_node._children = {}
+        new_node._pareto_paths = [
+            [entry[0], entry[1].copy()]
+            for entry in self._pareto_paths
+        ]
 
         return new_node
 
