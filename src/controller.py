@@ -2,10 +2,16 @@
 
 from __future__ import annotations
 from environment import Environment
-from directions import Direction
 
 class Controller():
     """Controller class which facilitates map changes and agent movement."""
+
+    DIRECTIONS = [
+        (0, 1),   # north
+        (0, -1),  # south
+        (1, 0),   # east
+        (-1, 0)   # west
+    ]
 
     def __init__(self, environment: Environment, start_pos: tuple = (0,0)):
         """Init method for the controller class.
@@ -128,7 +134,7 @@ class Controller():
         """
         self._distance_to_goal = new_distance_to_goal
 
-    def move(self, move_dir: Direction, shift_dir: Direction) -> bool:
+    def move(self, move_dir: tuple, shift_dir: tuple) -> bool:
         """Execute move and obstacle shift on the map.
 
         Args:
@@ -142,11 +148,11 @@ class Controller():
         # Calculate new position after move
         # This is not necessarily the fanciest method but it is fast
         x, y = self.current_pos
-        dx, dy = move_dir.value
+        dx, dy = move_dir
         new_pos = (x + dx, y + dy)
 
         # Calculate shifting position after move
-        dx_shift, dy_shift = shift_dir.value
+        dx_shift, dy_shift = shift_dir
         x_move, y_move = new_pos
         new_shift_pos = (x_move + dx_shift, y_move + dy_shift)
 
@@ -178,46 +184,42 @@ class Controller():
         cx, cy = self._current_pos
         dim = self._environment._env_dim
 
-        dirs = tuple(Direction)
-        dir_vals = [d.value for d in dirs]
+        dirs = self.DIRECTIONS  # list of (dx, dy)
 
-        # Outer loop: movement direction
-        for i, (dx_m, dy_m) in enumerate(dir_vals):
+        # Outer loop: movement
+        for dx_m, dy_m in dirs:
             x_m = cx + dx_m
             y_m = cy + dy_m
 
-            # bounds check #1
+            # bounds check #1 (movement)
             if x_m < 0 or x_m >= dim or y_m < 0 or y_m >= dim:
                 continue
 
-            move_dir = dirs[i]  # retrieve Enum only once
-
-            # Inner loop: shifting direction
-            for j, (dx_s, dy_s) in enumerate(dir_vals):
+            # Inner loop: shifting
+            for dx_s, dy_s in dirs:
                 x_s = x_m + dx_s
                 y_s = y_m + dy_s
 
-                # bounds check #2
+                # bounds check #2 (shift)
                 if x_s < 0 or x_s >= dim or y_s < 0 or y_s >= dim:
                     continue
 
-                shift_dir = dirs[j]
-                valid_pairs.append((move_dir, shift_dir))
+                valid_pairs.append(((dx_m, dy_m), (dx_s, dy_s)))
 
         return valid_pairs
 
-    def is_valid_pair(self, pair: tuple[Direction, Direction]) -> bool:
+    def is_valid_pair(self, pair: tuple) -> bool:
         """Check if a movement and shifting direction pair is valid."""
         move_dir, shift_dir = pair
         dim = self._environment._env_dim
         x, y = self._current_pos
 
         # Apply move
-        dx_m, dy_m = move_dir.value
+        dx_m, dy_m = move_dir
         x_m, y_m = x + dx_m, y + dy_m
 
         # Apply shift after move
-        dx_s, dy_s = shift_dir.value
+        dx_s, dy_s = shift_dir
         x_s, y_s = x_m + dx_s, y_m + dy_s
 
         # Inline boundary checks (avoid function calls)

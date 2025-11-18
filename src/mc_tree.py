@@ -213,8 +213,8 @@ class MctsTree():
                 valid_moves = leaf_copy._controller.get_all_valid_pairs()
                 # Get moves that do not increase distance
                 for move_dir, shifting_dir in valid_moves:
-                    new_pos = (current_pos[0] + move_dir.value[0],
-                            current_pos[1] + move_dir.value[1])
+                    new_pos = (current_pos[0] + move_dir[0],
+                            current_pos[1] + move_dir[1])
                     new_distance_to_goal = distance(new_pos)
                     if new_distance_to_goal <= current_distance_to_goal:
                         distance_minimizing_moves.append((move_dir, shifting_dir))
@@ -372,7 +372,7 @@ class MctsTree():
                 path.append(current._controller._current_pos)
                 if current._last_move is not None:#
                     moves.append(current._last_move)
-                    shifts.append(current._last_move[1].value)
+                    shifts.append(current._last_move[1])
                 current = current._parent
             
             moves.reverse()

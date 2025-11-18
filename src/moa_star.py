@@ -3,7 +3,6 @@
 from __future__ import annotations
 from controller import Controller
 from environment import Environment
-from directions import Direction
 import heapq
 from collections import defaultdict
 
