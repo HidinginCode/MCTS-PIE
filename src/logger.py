@@ -5,6 +5,7 @@ import shutil
 from node import Node
 from analyzer import Analyzer
 import pandas as pd
+import pickle
 
 class Logger():
     """Logger class which logs information for each run and prepares directories"""
@@ -81,6 +82,6 @@ class Logger():
             data["path"] = path
             data["moves"] = moves
 
-            frame = pd.DataFrame(data)
-            frame.to_csv(f"{self._log_path}/data-{i}.csv")
+            with open(f"{self._log_path}/{i}-values.pickle", "wb") as f:
+                pickle.dump(data,f)
 
