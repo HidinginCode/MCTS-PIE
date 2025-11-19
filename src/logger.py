@@ -20,6 +20,7 @@ class Logger():
                  start: tuple,
                  goal: tuple,
                  seed: int,
+                 base_root: Node,
                  base_log_path: str = "./log"):
         self._base_log_path = base_log_path
         self._map_name = map_name
@@ -32,6 +33,7 @@ class Logger():
         self._start = start
         self._goal = goal
         self._seed = seed
+        self._root = base_root
 
         if not os.path.exists(base_log_path):
             os.mkdir(base_log_path)
@@ -72,7 +74,7 @@ class Logger():
             path.reverse()
 
             Analyzer.visualize_path_with_shifts(solution._controller._environment._environment, path, shifts, (0,0), solution._controller._environment._goal, f"{self._log_path}/path-{i}.png")
-            Analyzer.save_path_as_gif(self.root._controller._environment, self.root._controller._start_pos, moves, f"{self._log_path}/path-{i}.gif")
+            Analyzer.save_path_as_gif(self._root._controller._environment, self._root._controller._start_pos, moves, f"{self._log_path}/path-{i}.gif")
 
             solution.refresh_values()
             data = solution._values.copy()

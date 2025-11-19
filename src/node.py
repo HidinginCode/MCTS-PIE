@@ -168,8 +168,22 @@ class Node():
         Returns:
             Node: New child node
         """
-        if self.get_untried_actions():
-            move_pair = random.choice(self.get_untried_actions())
+
+        # Oszillierende positionen verhindern dadurch dass wir nicht auf die Letzte pos zurück dürfen
+        current_pos = self._controller._current_pos
+        if self._parent is not None and current_pos != self._controller._environment._goal:
+            last_pos = self._parent._controller._current_pos
+            bad_move = (last_pos[0] - current_pos[0], last_pos[1]-current_pos[1])
+        else:
+            bad_move = None
+        
+        untried_actions = self.get_untried_actions()
+
+        if bad_move is not None:
+            untried_actions = [untried_action for untried_action in untried_actions if untried_action[0] != bad_move]
+
+        if untried_actions:
+            move_pair = random.choice(untried_actions)
             move_dir, shift_dir = move_pair
             child_node = Node(self._controller, self, move_pair)
             child_node._controller.move(move_dir, shift_dir)
@@ -178,4 +192,4 @@ class Node():
             self._children[move_pair] = child_node
             return child_node
         else:
-            raise RuntimeError("Attempted to expand a fully expanded node.")
+            return None

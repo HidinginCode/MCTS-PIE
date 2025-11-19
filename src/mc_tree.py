@@ -12,6 +12,7 @@ import numpy as np
 from tqdm import tqdm
 from analyzer import Analyzer
 import copy
+from logger import Logger
 
 
 class MctsTree():
@@ -47,14 +48,17 @@ class MctsTree():
         """
         return self._root
 
-    def tree_policy(self) -> Node | None:
+    def tree_policy(self, root: Node) -> Node | None:
         """Tree policy that selects the path from the root to a leaf.
+
+        Args:
+            root: Root to start policy from
 
         Returns:
             Node | None: Either leaf node or none if i.e. solution was selected.
         """
 
-        current_node = self._root
+        current_node = root
         while True:
             
             # Check if the node has already reached the goal
@@ -166,17 +170,21 @@ class MctsTree():
         pareto_front = Helper.determine_pareto_front_from_nodes(children.values(), True)
         return random.choice(pareto_front)
 
-    def iterative_heavy_distance_rollout(self, leaf: Node, simulations: int, maximum_moves: int):
+    def iterative_heavy_distance_rollout(self, leaf: Node, simulations: int, maximum_moves: int, remaining_budget: int) -> int:
         """Iterative version of the heavy distance rollout to look into performance.
 
         Args:
-            leaf (Node): Leaf to simulate
-            simulations (int): Number of iterative simulations
-            maximum_moves (int): Maximum number of moves per simulation
+            leaf (Node): Leaf to simulate.
+            simulations (int): Number of iterative simulations.
+            maximum_moves (int): Maximum number of moves per simulation.
+            remaining_budget (int): Remaining simulation budget.
+        
+        Returns:
+            Number of moves used for simulation
         """
         results = []
-        manhattan = lambda p, q: abs(p[0] - q[0]) + abs(p[1] - q[1])
 
+        used_move_counter = 0
         for _ in range(simulations):
             leaf_copy = leaf.clone()
             controller = leaf_copy._controller
@@ -203,7 +211,7 @@ class MctsTree():
 
             for _ in range(maximum_moves):
                 # Break if we reached terminal state
-                if leaf_copy.is_terminal_state():
+                if leaf_copy.is_terminal_state() or used_move_counter >= remaining_budget:
                     break
 
                 current_pos = controller._current_pos
@@ -222,10 +230,15 @@ class MctsTree():
                 # Randomly chose from moves
                 move_direction, shift_direction = random.choice(distance_minimizing_moves)
                 controller.move(move_direction, shift_direction)
+                used_move_counter += 1
             results.append(leaf_copy.clone())
+
+            if used_move_counter >= remaining_budget:
+                break
         
         chosen_node = random.choice(Helper.determine_pareto_front_from_nodes(results))
         leaf._values = dict(chosen_node._values)
+        return used_move_counter
 
     @staticmethod
     def path_domination(path1: list, path2: list) -> bool:
@@ -296,67 +309,44 @@ class MctsTree():
 
             current = current._parent
 
-    def search(self, iterations: int) -> None:
+    def search(self, total_budget: int, per_sim_budget: int) -> None:
         """Methods that builds the tree and looks for solutions
 
         Args:
-            iterations (int): Number of search iterations to complete
+            total_budget: Total number of simulations that can be used for expansion in the whole tree
+            per_sim_budget: Maximum number of simulation steps per simulation
         """
-
+        log = Logger(10000, "test", 20, "test", total_budget, "test", self._root._controller._environment._env_dim, self._root._controller._start_pos, self._root._controller._environment._goal, 420, self._root)
         print("Starting search ...")
         # Make list for found solutions
         solutions = []
 
-        for _ in tqdm(range(iterations)):
+        # Set root to initial root
+        current_root = self._root
+        while not current_root.is_terminal_state():
+            used_simulation_counter = 0
+            while used_simulation_counter < total_budget:
 
-            # Use tree policy
-            # Reminder: Tree policy returns none if selected node has reached goal or we are in unsolvable state
-            current_node = self.tree_policy()
+                # Use tree policy
+                # Reminder: Tree policy returns none if selected node has reached goal or we are in unsolvable state
+                current_node = self.tree_policy(root = current_root)
 
-            if current_node is not None:
-                # Expand the leaf (expand method automatically adds it to the current_nodes children and also returns it)
-                child = current_node.expand()
-                self._max_depth = child._depth
-
-                if child.is_terminal_state():
-                    if child not in solutions:
-                        print(f"Found new solution at depth: {child._depth}")
-                        solutions.append(child)
-                        print(f"Len before pruning: {len(solutions)}")
-                        solutions = Helper.determine_pareto_front_from_nodes(solutions)
-                        print(f"Len after pruning: {len(solutions)}")
+                if current_node is not None:
+                    # Expand the leaf (expand method automatically adds it to the current_nodes children and also returns it)
+                    child = current_node.expand()
+                    if child is not None: # expand returns none when we have no untried actions
+                        self._max_depth = child._depth
+                        if not child.is_terminal_state():
+                            used_simulation_counter+=self.iterative_heavy_distance_rollout(child, 10, per_sim_budget, total_budget-used_simulation_counter)
+                        self.backpropagate(child)
                     else:
-                        print(f"Found already known solution at depth {child._depth}")
-                    continue
-                else:
-                    self.iterative_heavy_distance_rollout(child, 16, 100)
-                    self.backpropagate(child)
+                        used_simulation_counter += per_sim_budget # For fast convergence in the end
 
-        for solution in solutions:
-            solution.refresh_values()
-
-        for i, solution in enumerate(solutions):
-            solution: Node
-            current = solution
-            path = []
-            shifts = []
-            moves = []
-
-            # Path reconstruction
-
-            while current is not None:
-                path.append(current._controller._current_pos)
-                if current._last_move is not None:#
-                    moves.append(current._last_move)
-                    shifts.append(current._last_move[1])
-                current = current._parent
-            
-            moves.reverse()
-            shifts.reverse()
-            path.reverse()
-
-            Analyzer.visualize_path_with_shifts(solution._controller._environment._environment, path, shifts, (0,0), solution._controller._environment._goal, f"./log/heatmap-{i}.png")
-            Analyzer.save_path_as_gif(self.root._controller._environment, self.root._controller._start_pos, moves, f"./log/heatmap-{i}.gif")
-            #Analyzer.interactive_step_path(self.root._controller._environment, self.root._controller._start_pos, moves)
-        # if iterations < 20000:
-        #     Analyzer.visualize_mcts_svg(self._root, "./log/tree.svg")
+            # Current root umsetzen
+            current_root = self.pareto_path_child_selection_cd(current_root)
+            print(f"Current root was set to {current_root._controller._current_pos}")
+            if current_root.is_terminal_state():
+                solutions.append(current_root)
+        
+        print(solutions[0]._controller._current_pos)
+        log.log_solutions(solutions)
