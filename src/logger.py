@@ -79,6 +79,6 @@ class Logger():
             data["path"] = path
             data["moves"] = moves
 
-            frame = pd.DataFrame(data)
-            frame.to_csv(f"{self._log_path}/data-{i}.csv")
+            #frame = pd.DataFrame(data)
+            #frame.to_csv(f"{self._log_path}/data-{i}.csv")
 

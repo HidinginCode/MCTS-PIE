@@ -68,7 +68,7 @@ class MctsTree():
             # At this point we know that current_node is neither terminal nor has any expansion left
             # Safety check for children
             if current_node._children:
-                current_node = self.pareto_path_child_selection_cd(current_node)
+                current_node = self.pareto_path_child_selection_hv(current_node)
 
     def pareto_path_child_selection_cd(self, node: Node) -> Node:
         """Method that selects a child from pareto_paths using the crowding distance.
@@ -238,8 +238,8 @@ class MctsTree():
         Returns:
             bool: Does path one dominate path 2
         """
-        value_of_path1 = path1[-1][1] # Extracts value dict from current position in path
-        value_of_path2 = path2[-1][1]
+        value_of_path1 = path1[0][1] # Extracts value dict from current position in path
+        value_of_path2 = path2[0][1]
 
         a1, a2, a3 =value_of_path1["step_count"],value_of_path1["weight_shifted"],value_of_path1["distance_to_goal"]
         b1, b2, b3 = value_of_path2["step_count"], value_of_path2["weight_shifted"], value_of_path2["distance_to_goal"]
@@ -261,7 +261,7 @@ class MctsTree():
         if not any(self.path_domination(p, path) for p in node._pareto_paths): # If there arent any paths in the pareto_paths that dominate the new path
             node._pareto_paths = [p for p in node._pareto_paths if p not in dominated]
             node._paths_changed = True
-            node._pareto_paths.append(copy.deepcopy(path))
+            node._pareto_paths.append(path.copy())
             # Then prune for if too many paths using epsilon domination
             if len(node._pareto_paths) > self._max_solutions and node._depth != 0: # We dont prune at root since we want accurate pareto front there
                 #print(f"Node at depth {node._depth} hat too many solutions, pruning ...")
@@ -292,7 +292,7 @@ class MctsTree():
             if current is not node: # Last node does not need to even have a pareto path since its a leaf
                 self.update_pareto_paths(current, path)
             if current._last_move is not None:
-                path.append((move, leaf_values.copy()))
+                path.append((move, leaf_values))
 
             current = current._parent
 
@@ -329,7 +329,7 @@ class MctsTree():
                         print(f"Found already known solution at depth {child._depth}")
                     continue
                 else:
-                    self.iterative_heavy_distance_rollout(child, 16, 100)
+                    #self.iterative_heavy_distance_rollout(child, 16, 0)
                     self.backpropagate(child)
 
         for solution in solutions:
