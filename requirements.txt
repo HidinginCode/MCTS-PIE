@@ -5,3 +5,4 @@ tqdm
 pymoo
 snakeviz
 plotly
+pandas
