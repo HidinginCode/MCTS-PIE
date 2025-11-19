@@ -72,21 +72,19 @@ class MctsTree():
             # At this point we know that current_node is neither terminal nor has any expansion left
             # Safety check for children
             if current_node._children:
-                current_node = self.pareto_path_child_selection_cd(current_node)
+                current_node = self.ucb_child_selection(current_node)
 
     def pareto_path_child_selection_cd(self, node: Node) -> Node:
         """Method that selects a child from pareto_paths using the crowding distance.
 
         Args:
             node (Node): Node of which to select a child
-
-        Returns:
-            Node: Chosen child.
         """
-        if not node._pareto_paths:
-            return random.choice(node._children.values())
 
-        # If front changed calculate new crowding distance
+        if not node._pareto_paths:
+            return random.choice(list(node._children.values()))
+
+        # Recompute CDs only if front changed
         if node._paths_changed:
             node._paths_changed = False
             values = [path[0][1] for path in node._pareto_paths]
@@ -95,20 +93,49 @@ class MctsTree():
         else:
             crowding_distances = node._old_cd_values
 
-        total = sum(v for v in crowding_distances if v != np.inf) * 2 # The times 2 because we allocate 50% weight overall to the extreme points
-        
-        # Guard against division by 0
-        if total == 0:
-            total = 1
-        
-        weights = []
-        for cd in crowding_distances:
-            if cd == np.inf:
-                weights.append(0.25)
+        cds = crowding_distances
+        n = len(cds)
+
+        # Identify extremes (inf) and finite CDs
+        inf_indices = [i for i, c in enumerate(cds) if c == np.inf]
+        finite_indices = [i for i, c in enumerate(cds) if np.isfinite(c)]
+        finite_values = [cds[i] for i in finite_indices]
+
+        weights = [0.0] * n
+
+        # Case 1: no extremes -> normal crowding-distance selection
+        if not inf_indices:
+            total = sum(finite_values)
+            if total <= 0:
+                # all zeros -> uniform
+                weights = [1.0] * n
             else:
-                weights.append(cd/total)
-        
-        child_key_index = random.choices(range(len(crowding_distances)), weights, k=1)[0]
+                for i in finite_indices:
+                    weights[i] = cds[i] / total
+
+        else:
+            # We *do* have extremes: give them 50% of the mass, the rest to finite ones
+            extreme_mass = 0.5
+            finite_mass = 0.5
+
+            # If there are no finite positive CDs, just pick among extremes
+            finite_sum = sum(finite_values)
+            if finite_sum <= 0:
+                # Only extremes matter -> uniform over extremes
+                for i in inf_indices:
+                    weights[i] = 1.0
+            else:
+                # Distribute 50% equally among extremes
+                per_extreme = extreme_mass / len(inf_indices)
+                for i in inf_indices:
+                    weights[i] = per_extreme
+
+                # Distribute the other 50% proportional to finite CDs
+                for i in finite_indices:
+                    weights[i] += (cds[i] / finite_sum) * finite_mass
+
+        # Now sample according to weights
+        child_key_index = random.choices(range(n), weights=weights, k=1)[0]
         child_key = node._pareto_paths[child_key_index][-1][0]
 
         return node._children[child_key]
@@ -144,31 +171,97 @@ class MctsTree():
         return node._children[child_key]
 
     def ucb_child_selection(self, node: Node) -> Node:
-        """Selects children based on pareto dominance of UCB1-Calculations
+        """Select children based on Pareto dominance of normalized UCB1 values (minimization)."""
+        children = list(node._children.values())
+        if not children:
+            raise RuntimeError("ucb_child_selection called on node without children")
+
+        dims = list(children[0]._values.keys())
+
+        mins = {d: float("inf") for d in dims}
+        maxs = {d: float("-inf") for d in dims}
+        for child in children:
+            for d, v in child._values.items():
+                if v < mins[d]:
+                    mins[d] = v
+                if v > maxs[d]:
+                    maxs[d] = v
+
+        # Avoid zero-range problems
+        ranges = {d: (maxs[d] - mins[d]) if (maxs[d] > mins[d]) else 1.0 for d in dims}
+
+        parent_visits = max(1, node._visits)
+        logN = np.log(parent_visits)
+        c = 1.0  # exploration coefficient
+
+        for child in children:
+            # Force exploration of never-visited children
+            if child._visits == 0:
+                # For minimization: make them look extremely good in all dims
+                child._ucb_values = {d: -np.inf for d in dims}
+                continue
+
+            # Normalized mean costs in [0,1]
+            norm_vals = {
+                d: (child._values[d] - mins[d]) / ranges[d]
+                for d in dims
+            }
+
+            # Scalar exploration term (same for all dims, but on normalized scale)
+            exploration_term = c * np.sqrt(2 * logN / child._visits)
+
+            # For minimization: smaller is better, so subtract exploration
+            child._ucb_values = {
+                d: norm_vals[d] - exploration_term
+                for d in dims
+            }
+
+        # Determine Pareto front in UCB space and pick one child
+        pareto_front = Helper.determine_pareto_front_from_nodes(children, True)
+        return random.choice(pareto_front)
+
+    def light_rollout(self, leaf: Node, simulations: int, maximum_moves: int, remaining_budget: int)  -> int:
+        """Light rollout which does random moves.
 
         Args:
-            node (Node): Node of which children are selected
+            leaf (Node): Leaf from which to simulate.
+            simulations (int): Number of iterative simulations.
+            maximum_moves (int): Maximum move per simulation.
+            remaining_budget (int): Remaining step budget for simulations.
 
         Returns:
-            Node: Child node
+            int: Used step budget
         """
-        children = node._children
-        number_of_children = len(children)
 
-        for child in children.values():
-            child: Node
-            dimensions = len(child._values) # Number of dimensions
-            child_visits = child._visits
-            parent_visits = node._visits
-            exploration_term = np.sqrt(
-                (2*np.log(
-                    parent_visits*np.sqrt(np.sqrt(dimensions*number_of_children)))
-                )/child_visits
-            )
-            child._ucb_values = {k: v - exploration_term for k, v in child._values.items()}
+        results = []
+        used_move_counter = 0
 
-        pareto_front = Helper.determine_pareto_front_from_nodes(children.values(), True)
-        return random.choice(pareto_front)
+        for _ in range(simulations):
+            # Clone so we have independent simulation
+            leaf_copy = leaf.clone()
+            controller = leaf_copy._controller
+
+            for _ in range(maximum_moves):
+                # Break if we reached terminal state or used whole budget
+                if leaf_copy.is_terminal_state() or used_move_counter >= remaining_budget:
+                    break
+                # Choose randomly from all valid pairs
+                all_valid_moves = controller.get_all_valid_pairs()
+                move_dir, shift_dir = random.choice(all_valid_moves)
+                controller.move(move_dir, shift_dir)
+
+                # Update move counter
+                used_move_counter += 1
+            
+            results.append(leaf_copy.clone())
+
+            if used_move_counter >= remaining_budget:
+                break
+        
+        chosen_node = random.choice(Helper.determine_pareto_front_from_nodes(results))
+        leaf._values = chosen_node._values.copy()
+        return used_move_counter
+
 
     def iterative_heavy_distance_rollout(self, leaf: Node, simulations: int, maximum_moves: int, remaining_budget: int) -> int:
         """Iterative version of the heavy distance rollout to look into performance.
@@ -186,6 +279,8 @@ class MctsTree():
 
         used_move_counter = 0
         for _ in range(simulations):
+
+            # Clone so we have independent simulation
             leaf_copy = leaf.clone()
             controller = leaf_copy._controller
             start = controller._start_pos
@@ -210,15 +305,17 @@ class MctsTree():
                     return (d1 if d1 >= 0 else -d1) + (d2 if d2 >= 0 else -d2)
 
             for _ in range(maximum_moves):
+
                 # Break if we reached terminal state
                 if leaf_copy.is_terminal_state() or used_move_counter >= remaining_budget:
                     break
 
-                current_pos = controller._current_pos
                 # Get needed parts of calculation and prepare move list
+                current_pos = controller._current_pos
                 current_distance_to_goal = distance(current_pos)
                 distance_minimizing_moves = []
                 valid_moves = leaf_copy._controller.get_all_valid_pairs()
+
                 # Get moves that do not increase distance
                 for move_dir, shifting_dir in valid_moves:
                     new_pos = (current_pos[0] + move_dir[0],
@@ -231,6 +328,7 @@ class MctsTree():
                 move_direction, shift_direction = random.choice(distance_minimizing_moves)
                 controller.move(move_direction, shift_direction)
                 used_move_counter += 1
+
             results.append(leaf_copy.clone())
 
             if used_move_counter >= remaining_budget:
@@ -254,7 +352,7 @@ class MctsTree():
         value_of_path1 = path1[-1][1] # Extracts value dict from current position in path
         value_of_path2 = path2[-1][1]
 
-        a1, a2, a3 =value_of_path1["step_count"],value_of_path1["weight_shifted"],value_of_path1["distance_to_goal"]
+        a1, a2, a3 = value_of_path1["step_count"],value_of_path1["weight_shifted"],value_of_path1["distance_to_goal"]
         b1, b2, b3 = value_of_path2["step_count"], value_of_path2["weight_shifted"], value_of_path2["distance_to_goal"]
 
         return (
@@ -271,14 +369,16 @@ class MctsTree():
         """
 
         dominated = [p for p in node._pareto_paths if self.path_domination(path, p)] # Get all paths from pareto paths that are dominated by the new one
+
         if not any(self.path_domination(p, path) for p in node._pareto_paths): # If there arent any paths in the pareto_paths that dominate the new path
             node._pareto_paths = [p for p in node._pareto_paths if p not in dominated]
             node._paths_changed = True
             node._pareto_paths.append(copy.deepcopy(path))
+            
             # Then prune for if too many paths using epsilon domination
-            if len(node._pareto_paths) > self._max_solutions and node._depth != 0: # We dont prune at root since we want accurate pareto front there
-                #print(f"Node at depth {node._depth} hat too many solutions, pruning ...")
-                Helper.epsilon_clustering(node, max_archive_size=self._max_solutions)
+            #if len(node._pareto_paths) > self._max_solutions and node._depth != 0: # We dont prune at root since we want accurate pareto front there
+            #    #print(f"Node at depth {node._depth} hat too many solutions, pruning ...")
+            #    Helper.epsilon_clustering(node, max_archive_size=self._max_solutions)
 
     def backpropagate(self, node: Node) -> None:
         """Backpropagate leaf metrics up the tree."""
@@ -302,10 +402,12 @@ class MctsTree():
             # Just append to path and go to parent
             # Add path that contains child move to parents pareto front
             # Add own origin move to path -> repeat till root
+
             if current is not node: # Last node does not need to even have a pareto path since its a leaf
                 self.update_pareto_paths(current, path)
+            
             if current._last_move is not None:
-                path.append((move, leaf_values.copy()))
+                path.append((move, current._values.copy()))
 
             current = current._parent
 
@@ -334,16 +436,20 @@ class MctsTree():
                 if current_node is not None:
                     # Expand the leaf (expand method automatically adds it to the current_nodes children and also returns it)
                     child = current_node.expand()
+
                     if child is not None: # expand returns none when we have no untried actions
                         self._max_depth = child._depth
+
                         if not child.is_terminal_state():
-                            used_simulation_counter+=self.iterative_heavy_distance_rollout(child, 10, per_sim_budget, total_budget-used_simulation_counter)
+                            # Do simulations and add used budget onto sim counter
+                            used_simulation_counter+=self.iterative_heavy_distance_rollout(child, 500, per_sim_budget, total_budget-used_simulation_counter)
+
                         self.backpropagate(child)
                     else:
                         used_simulation_counter += per_sim_budget # For fast convergence in the end
 
             # Current root umsetzen
-            current_root = self.pareto_path_child_selection_cd(current_root)
+            current_root = self.ucb_child_selection(current_root)
             print(f"Current root was set to {current_root._controller._current_pos}")
             if current_root.is_terminal_state():
                 solutions.append(current_root)

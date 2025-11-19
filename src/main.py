@@ -16,6 +16,7 @@ import shutil
 def main():
     """ Main method that runs all components togehter"""
 
+    # 420 seed sweet spot 500 rollouts, 1000000, 20
     random.seed(420)
     np.random.seed(420)
 
@@ -32,7 +33,7 @@ def main():
 
     print("Starting MCTS ...")
 
-    tree.search(5000000, 10000)
+    tree.search(1000000, 20)
     # paths = moa_star.moa_star((0,0), (4,4), 5, moa_star.heuristic)
     # for path in paths: 
     #     path.reverse()
