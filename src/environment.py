@@ -106,7 +106,7 @@ class Environment():
         #############################
         # Generate Checkerboard Map #
         #############################
-        checkerboard_map = [[random.random() if not (x%2 == 0 or y%2 == 0) else 0 for y in range(env_dim)] for x in range(env_dim)]
+        checkerboard_map = [[(random.random() if (x, y) != (0, 0) and (x + y) % 2 == 1 else 0.0) for y in range(env_dim)]for x in range(env_dim)]
 
         ##################################
         # Generate Map with Obvious Path #

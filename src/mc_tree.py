@@ -450,11 +450,10 @@ class MctsTree():
                             used_simulation_counter += per_sim_budget # For fast convergence in the end
 
                 # Current root umsetzen
-                # TODO: Use epsilon clusterin on child nodes to determine best one
                 current_root = Helper.epsilon_clustering_for_nodes(current_root)
                 #current_root = random.choice(Helper.determine_pareto_front_from_nodes(current_root._children.values()))
                 #current_root = self.pareto_path_child_selection_hv(current_root)
-                print(f"[RUN {run}] Current root was set to {current_root._controller._current_pos}")
+                print(f"[RUN {run+1}] Current root was set to {current_root._controller._current_pos}")
                 if current_root.is_terminal_state():
                     solutions.append(current_root)
         log.log_solutions(solutions)
