@@ -122,45 +122,78 @@ class Helper():
         return normalized_archive
 
     @staticmethod
-    def epsilon_clustering(node: Node, max_archive_size: int, eps: float = 1e-4, eps_max: float = 1, eps_steps = 0.001):
-        """Method that uses epsilon clustering to prune the pareto path archive of a node.
+    def epsilon_clustering(node: Node, max_archive_size: int, eps: float = 1e-4, eps_steps=0.001):
 
-        Args:
-            node (Node): Node to prune
-            max_archive_size (int): Desired archive size.
-            eps (float, optional): Epsilon value. Defaults to 0.0.
-            eps_max (float, optional): Maximum epsilon value. Defaults to 1.
-            eps_steps (float, optional): Epsilon step size. Defaults to 0.01.
-        """
-        
         current = list(node._pareto_paths)
-        iteration = 0
-        value_dicts = [path[-1][1] for path in current]
-        normalized_dicts = Helper.normalize_archive(value_dicts)
 
-        while len(current) > max_archive_size and eps <= eps_max:
-            # Normalize all path value dicts for fair scaling
+        while len(current) > max_archive_size:
+            value_dicts = [path[-1][1] for path in current]
+            normalized_dicts = Helper.normalize_archive(value_dicts)
 
-            # Assign each path to epsilon grid cell
             archive = {}
             for path, norm_dict in zip(current, normalized_dicts):
-                values = np.array(list(norm_dict.values()))
+                values = np.array(list(norm_dict.values()), dtype=float)
                 cell = tuple(np.floor(values / eps).astype(int))
 
                 if cell not in archive:
                     archive[cell] = path
                 else:
-                    # Keep the representative with smaller total objective sum
-                    old_values = np.array(list(archive[cell][0][1].values()))
-                    new_values = np.array(list(path[0][1].values()))
-                    if np.sum(new_values) < np.sum(old_values):
+                    # use RAW values for representative choice
+                    old_values = np.array(list(archive[cell][-1][1].values()), dtype=float)
+                    new_values = np.array(list(path[-1][1].values()), dtype=float)
+                    if new_values.sum() < old_values.sum():
                         archive[cell] = path
 
             current = list(archive.values())
-            iteration += 1
             eps += eps_steps
 
         node._pareto_paths = current
+
+    def epsilon_clustering_for_nodes(node: Node, eps: float = 1e-4, eps_steps = 0.001):
+        """Returns the child from the given node that survives the epsilon clustering.
+
+        Args:
+            node (Node): Node from which child is selected.
+            eps (float, optional): Epsilon start value. Defaults to 1e-4.
+            eps_max (float, optional): Maximum epsilon value. Defaults to 1.
+            eps_steps (float, optional): Steps in which to increase epsilon. Defaults to 0.001.
+
+        Returns:
+            Node: Child that survived clustering
+        """
+        # Clone node for independent everything
+        children = list(node._children.values())
+
+        if not children:
+            return None
+        if len(children) == 1:
+            return children[0]
+
+        while len(children) > 1:
+            # Normalize CURRENT children (recomputed each iteration)
+            raw_value_dicts = [child._values for child in children]
+            normalized_dicts = Helper.normalize_archive(raw_value_dicts)
+
+            archive: dict[tuple[int, ...], Node] = {}
+
+            for child, norm_dict in zip(children, normalized_dicts):
+                norm_vals = np.array(list(norm_dict.values()), dtype=float)
+                cell = tuple(np.floor(norm_vals / eps).astype(int))
+
+                if cell not in archive:
+                    archive[cell] = child
+                else:
+                    # choose representative by RAW objectives (minimization)
+                    old_raw = np.array(list(archive[cell]._values.values()), dtype=float)
+                    new_raw = np.array(list(child._values.values()), dtype=float)
+
+                    if new_raw.sum() < old_raw.sum():
+                        archive[cell] = child
+
+            children = list(archive.values())
+            eps += eps_steps   # coarsen grid gradually until only one survives
+
+        return children[0]
 
     @staticmethod
     def crowding_distance(points: list) -> list:
