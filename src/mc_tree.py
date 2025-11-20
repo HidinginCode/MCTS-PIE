@@ -18,17 +18,19 @@ from logger import Logger
 class MctsTree():
     """This class contains the mcts tree."""
 
-    def __init__(self, root: Node, max_solutions: int = 10):
+    def __init__(self, root: Node, seed: int,  max_solutions: int = 10):
         """Init method for the MCTS tree.
 
         Args:
             root (Node): Root node for the tree
+            seed (int): Seed (in this case only important to pass to logger)
             max_solutions (int): Maximum number of entries in pareto front
         """
         self._identifier = id(self)
         self._root = root
         self._max_solutions = max_solutions
         self._max_depth = 0
+        self._seed = seed
 
     @property
     def identifier(self) -> int:
@@ -411,49 +413,68 @@ class MctsTree():
 
             current = current._parent
 
-    def search(self, total_budget: int, per_sim_budget: int, simulations_per_child: int) -> None:
+    def search(self, total_budget: int, per_sim_budget: int, simulations_per_child: int, rollout_func: int = 0, root_selection: int = 0, tree_selection: int = 0) -> None:
         """Methods that builds the tree and looks for solutions
 
         Args:
             total_budget (int): Total number of simulations that can be used for expansion in the whole tree.
             per_sim_budget (int): Maximum number of simulation steps per simulation.
             simulations_per_child (int): Number of rollouts per child from which best one is chosen.
+            rollout_func (int): Indicator which rollout function to use.
+            root_selection (int): Indicator which root selection function to use.
+            tree_selection (int): Inidcator which tree selection function to use.
         """
-        log = Logger(10000, self.ucb_child_selection.__name__, 20, self.iterative_heavy_distance_rollout.__name__, total_budget, self._root._controller._environment._map_type, self._root._controller._environment._env_dim, self._root._controller._start_pos, self._root._controller._environment._goal, 420, self._root)
+        match root_selection:
+            case 0: root_sel_function = Helper.epsilon_clustering_for_nodes
+            case 1: root_sel_function = self.pareto_path_child_selection_hv
+            case 2: root_sel_function = self.pareto_path_child_selection_cd
+            case _: raise ValueError("Did not supply a suitable root selection indicator")
+        
+        match tree_selection:
+            case 0: tree_sel_function = self.ucb_child_selection
+            case 1: tree_sel_function = self.pareto_path_child_selection_hv
+            case 2: tree_sel_function = self.pareto_path_child_selection_cd
+            case _: raise ValueError("Did not supply a suitable tree selection indicator")
+        
+        match rollout_func:
+            case 0: rollout_function = self.light_rollout
+            case 1: rollout_function = self.iterative_heavy_distance_rollout
+            case _: raise ValueError("Did not supply a suitable rollout function indicator")
+
+        log = Logger(self._root._controller._environment._map_type, self._root._controller._environment._env_dim, self._root._controller._start_pos, self._root._controller._environment._goal, total_budget, per_sim_budget, simulations_per_child, tree_sel_function.__name__, root_sel_function.__name__, self._max_solutions, rollout_func, self._seed, self._root)
         print("Starting search ...")
         # Make list for found solutions
-        solutions = []
-        for run in range(3):
             # Set root to initial root
-            current_root = self._root
-            while not current_root.is_terminal_state():
-                used_simulation_counter = 0
-                while used_simulation_counter < total_budget:
+        current_root = self._root
+        solutions = []
+        while not current_root.is_terminal_state():
+            used_simulation_counter = 0
+            while used_simulation_counter < total_budget:
 
-                    # Use tree policy
-                    # Reminder: Tree policy returns none if selected node has reached goal or we are in unsolvable state
-                    current_node = self.tree_policy(root = current_root)
+                # Use tree policy
+                # Reminder: Tree policy returns none if selected node has reached goal or we are in unsolvable state
+                current_node = self.tree_policy(root = current_root)
 
-                    if current_node is not None:
-                        # Expand the leaf (expand method automatically adds it to the current_nodes children and also returns it)
-                        child = current_node.expand()
+                if current_node is not None:
+                    # Expand the leaf (expand method automatically adds it to the current_nodes children and also returns it)
+                    child = current_node.expand()
 
-                        if child is not None: # expand returns none when we have no untried actions
-                            self._max_depth = child._depth
+                    if child is not None: # expand returns none when we have no untried actions
+                        self._max_depth = child._depth
 
-                            if not child.is_terminal_state():
-                                # Do simulations and add used budget onto sim counter
-                                used_simulation_counter+=self.iterative_heavy_distance_rollout(child, simulations_per_child, per_sim_budget, total_budget-used_simulation_counter)
+                        if not child.is_terminal_state():
+                            # Do simulations and add used budget onto sim counter
+                            used_simulation_counter+=self.iterative_heavy_distance_rollout(child, simulations_per_child, per_sim_budget, total_budget-used_simulation_counter)
 
-                            self.backpropagate(child, current_root)
-                        else:
-                            used_simulation_counter += per_sim_budget # For fast convergence in the end
+                        self.backpropagate(child, current_root)
+                    else:
+                        used_simulation_counter += per_sim_budget # For fast convergence in the end
 
-                # Current root umsetzen
-                current_root = Helper.epsilon_clustering_for_nodes(current_root)
-                #current_root = random.choice(Helper.determine_pareto_front_from_nodes(current_root._children.values()))
-                #current_root = self.pareto_path_child_selection_hv(current_root)
-                print(f"[RUN {run+1}] Current root was set to {current_root._controller._current_pos}")
-                if current_root.is_terminal_state():
-                    solutions.append(current_root)
+            # Current root umsetzen
+            current_root = Helper.epsilon_clustering_for_nodes(current_root)
+            #current_root = random.choice(Helper.determine_pareto_front_from_nodes(current_root._children.values()))
+            #current_root = self.pareto_path_child_selection_hv(current_root)
+            print(f"Root was set to {current_root._controller._current_pos}")
+            if current_root.is_terminal_state():
+                solutions.append(current_root)
         log.log_solutions(solutions)

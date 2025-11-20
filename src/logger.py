@@ -12,25 +12,29 @@ class Logger():
     """Logger class which logs information for each run and prepares directories"""
 
     def __init__(self, 
-                 iterations: int, 
-                 child_selection_method: str,
-                 max_pareto_paths: int,
-                 simulation_method: str,
-                 simulation_steps: int,
                  map_name: str,
                  env_dim: int,
                  start: tuple,
                  goal: tuple,
+                 total_budget: int,
+                 per_sim_budget: int,
+                 number_of_simulations: int, 
+                 tree_selection_method: str,
+                 root_selection_method: str, 
+                 max_pareto_paths: int,
+                 simulation_method: str,
                  seed: int,
                  base_root: Node,
                  base_log_path: str = "./log"):
         self._base_log_path = base_log_path
         self._map_name = map_name
-        self._iterations = iterations 
-        self._child_selection_method = child_selection_method
+        self._total_budget = total_budget
+        self._per_sim_budget = per_sim_budget
+        self._number_of_simulations = number_of_simulations
+        self._tree_selection_method = tree_selection_method
+        self._root_selection_method = root_selection_method
         self._max_pareto_paths = max_pareto_paths
         self._simulation_method = simulation_method
-        self._simulation_steps = simulation_steps
         self._env_dim = env_dim
         self._start = start
         self._goal = goal
@@ -40,7 +44,7 @@ class Logger():
         if not os.path.exists(base_log_path):
             os.mkdir(base_log_path)
         
-        dir_name = f"{self._map_name}_{self._iterations}_{self._child_selection_method}_{self._simulation_method}_{self._simulation_steps}_{self._env_dim}_{self._start}_{self._goal}_{self._seed}_{time()}"
+        dir_name = f"{self._map_name}-{self._env_dim}-{self._start}-{self._goal}-{self._tree_selection_method}-{self._root_selection_method}-{self._simulation_method}-{self._total_budget}-{self._per_sim_budget}-{self._number_of_simulations}-{self._max_pareto_paths}-{self._seed}"
         log_path = os.path.join(base_log_path, dir_name)
         if os.path.exists(log_path):
             shutil.rmtree(log_path)

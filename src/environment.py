@@ -8,7 +8,7 @@ import pickle
 class Environment():
     """This class represents the obstacle environment."""
 
-    def __init__(self, env_dim: int = 10, goal: tuple = (9,9), new_env: bool = True, map_type: str = None) -> None:
+    def __init__(self, env_dim: int = 10, goal: tuple = (9,9), new_env: bool = True, map_type: str = None, start_pos: tuple = (0,0)) -> None:
         """Init method for the environment which sets the map dimension and the goal.
 
         Args:
@@ -19,6 +19,7 @@ class Environment():
         self._env_dim = env_dim
         self._goal = goal
         self._identifier = id(self)
+        self._start_pos = start_pos
 
         if not os.path.exists("./maps"):
             self.generate_maps(env_dim)
@@ -101,12 +102,12 @@ class Environment():
         #######################
         # Generate Random Map #
         #######################
-        random_map = [[random.random() if (x,y) != (0,0) else 0 for y in range(env_dim)] for x in range(env_dim)]
+        random_map = [[random.random() if (x,y) != self._start_pos else 0 for y in range(env_dim)] for x in range(env_dim)]
 
         #############################
         # Generate Checkerboard Map #
         #############################
-        checkerboard_map = [[(random.random() if (x, y) != (0, 0) and (x + y) % 2 == 1 else 0.0) for y in range(env_dim)]for x in range(env_dim)]
+        checkerboard_map = [[(random.random() if (x, y) != self._start_pos and (x + y) % 2 == 1 else 0.0) for y in range(env_dim)]for x in range(env_dim)]
 
         ##################################
         # Generate Map with Obvious Path #
@@ -114,7 +115,7 @@ class Environment():
         sx, sy = (0,0)
         gx, gy = (env_dim-1, env_dim-1)
 
-        easy_map = [[random.random() if (x,y) != (0,0) else 0 for y in range(env_dim)] for x in range(env_dim)]
+        easy_map = [[random.random() if (x,y) != self._start_pos else 0 for y in range(env_dim)] for x in range(env_dim)]
 
         x, y = sx, sy
         easy_map[x][y] = 0
