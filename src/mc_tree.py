@@ -419,11 +419,11 @@ class MctsTree():
             per_sim_budget (int): Maximum number of simulation steps per simulation.
             simulations_per_child (int): Number of rollouts per child from which best one is chosen.
         """
-        log = Logger(10000, "test", 20, "test", total_budget, "test", self._root._controller._environment._env_dim, self._root._controller._start_pos, self._root._controller._environment._goal, 420, self._root)
+        log = Logger(10000, self.ucb_child_selection.__name__, 20, self.iterative_heavy_distance_rollout.__name__, total_budget, self._root._controller._environment._map_type, self._root._controller._environment._env_dim, self._root._controller._start_pos, self._root._controller._environment._goal, 420, self._root)
         print("Starting search ...")
         # Make list for found solutions
         solutions = []
-        for _ in range(3):
+        for run in range(3):
             # Set root to initial root
             current_root = self._root
             while not current_root.is_terminal_state():
@@ -454,7 +454,7 @@ class MctsTree():
                 current_root = Helper.epsilon_clustering_for_nodes(current_root)
                 #current_root = random.choice(Helper.determine_pareto_front_from_nodes(current_root._children.values()))
                 #current_root = self.pareto_path_child_selection_hv(current_root)
-                print(f"Current root was set to {current_root._controller._current_pos}")
+                print(f"[RUN {run}] Current root was set to {current_root._controller._current_pos}")
                 if current_root.is_terminal_state():
                     solutions.append(current_root)
         log.log_solutions(solutions)

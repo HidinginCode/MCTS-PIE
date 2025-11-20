@@ -6,6 +6,7 @@ from node import Node
 from analyzer import Analyzer
 import pandas as pd
 import pickle
+from time import time
 
 class Logger():
     """Logger class which logs information for each run and prepares directories"""
@@ -39,7 +40,7 @@ class Logger():
         if not os.path.exists(base_log_path):
             os.mkdir(base_log_path)
         
-        dir_name = f"{self._map_name}_{self._iterations}_{self._child_selection_method}_{self._simulation_method}_{self._simulation_steps}_{self._env_dim}_{self._start}_{self._goal}_{self._seed}"
+        dir_name = f"{self._map_name}_{self._iterations}_{self._child_selection_method}_{self._simulation_method}_{self._simulation_steps}_{self._env_dim}_{self._start}_{self._goal}_{self._seed}_{time()}"
         log_path = os.path.join(base_log_path, dir_name)
         if os.path.exists(log_path):
             shutil.rmtree(log_path)
