@@ -52,6 +52,7 @@ class Logger():
         os.mkdir(log_path)
 
         self._log_path = log_path
+        self.create_header_file()
 
     def log_solutions(self, solutions: list[Node]) -> None:
         """Log the solutions of a run in log directory.
@@ -79,9 +80,6 @@ class Logger():
             shifts.reverse()
             path.reverse()
 
-            Analyzer.visualize_path_with_shifts(solution._controller._environment._environment, path, shifts, (0,0), solution._controller._environment._goal, f"{self._log_path}/path-{i}.png")
-            Analyzer.save_path_as_gif(self._root._controller._environment, self._root._controller._start_pos, moves, f"{self._log_path}/path-{i}.gif")
-
             solution.refresh_values()
             data = solution._values.copy()
             data["path"] = path
@@ -90,3 +88,24 @@ class Logger():
             with open(f"{self._log_path}/{i}-values.pickle", "wb") as f:
                 pickle.dump(data,f)
 
+            Analyzer.visualize_path_with_shifts(solution._controller._environment._environment, path, shifts, (0,0), solution._controller._environment._goal, f"{self._log_path}/path-{i}.png")
+            Analyzer.save_path_as_gif(self._root._controller._environment, self._root._controller._start_pos, moves, f"{self._log_path}/path-{i}.gif")
+
+    def create_header_file(self) -> None:
+        """Creates a header file in the log directory containing all hyperparameters."""
+        header_dict = {
+            "map_name": self._map_name,
+            "env_dim": self._env_dim,
+            "start": self._start,
+            "goal": self._goal,
+            "total_budget": self._total_budget,
+            "per_sim_budget": self._per_sim_budget,
+            "number_of_simulations": self._number_of_simulations,
+            "tree_selection_method": self._tree_selection_method,
+            "root_selection_method": self._root_selection_method,
+            "max_pareto_paths": self._max_pareto_paths,
+            "simulation_method": self._simulation_method,
+            "seed": self._seed
+        }
+        with open(f"{self._log_path}/header.pickle", "wb") as f:
+            pickle.dump(header_dict, f)
