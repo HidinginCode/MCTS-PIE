@@ -10,6 +10,7 @@ from controller import Controller
 from environment import Environment
 from PIL import Image
 import tempfile
+import pickle
 
 class Analyzer:
     """Class that is used to log and create visual data."""
@@ -352,3 +353,28 @@ class Analyzer:
             os.remove(f)
 
         return gif_path
+    
+    @staticmethod
+    def visualize_maps() -> None:
+        """Method that creates a heatmap of all maps in ./maps
+        """
+
+        out_path = "./out"
+        map_path = "./maps"
+
+        if not os.path.exists(out_path):
+            os.mkdir(out_path)
+
+        if not os.path.exists(map_path):
+            raise FileNotFoundError("Directory ./maps does not seem to exist.")
+        
+        for dir in os.listdir(map_path):
+            path = os.path.join(map_path, dir)
+            with open(path, "rb") as f:
+                map_name = dir.removesuffix(".pickle").replace("_", " ")
+                map_array = pickle.load(f)
+                plt.imshow(map_array, cmap="gray_r", interpolation="nearest")
+                plt.colorbar()
+                plt.title(f"{map_name}")
+                plt.savefig(os.path.join(out_path, dir.removesuffix(".pickle")+".png"))
+                plt.close()

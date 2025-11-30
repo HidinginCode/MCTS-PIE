@@ -12,6 +12,7 @@ import numpy as np
 import moa_star
 import os
 import shutil
+from analyzer import Analyzer
 
 def main():
     """ Main method that runs all components togehter"""
@@ -84,4 +85,5 @@ def simulations(map: str,
     tree.search(total_budget=budget, per_sim_budget=per_sim_budget, simulations_per_child=number_of_sims, rollout_func = rollout_method, root_selection = root_selection_method, tree_selection = tree_selection_method)
 
 if __name__ == "__main__":
-    simulations(map = "easy_map", env_dim = 10, start = (0,0), goal=(9,9), budget=1000000, per_sim_budget=20, number_of_sims=1000, rollout_method=0, root_selection_method=0, tree_selection_method=0)
+    #simulations(map = "easy_map", env_dim = 30, start = (0,0), goal=(9,9), budget=1000000, per_sim_budget=20, number_of_sims=1000, rollout_method=0, root_selection_method=0, tree_selection_method=0)
+    Analyzer.visualize_maps()
