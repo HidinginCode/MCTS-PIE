@@ -90,100 +90,102 @@ class Environment():
         """
         return self._goal
     
-    def generate_maps(self, env_dim: int = 10):
+    def generate_maps(self, env_dim_old: int = 10):
         """This method generates AND safes maps to a directory.
 
         Args:
             env_dim (int, optional): Defines the environment size. Defaults to 10.
         """
-        print("Generating maps according to speicifcations ...")
-        map_path = "./maps"
-        if not os.path.exists(map_path):
-            os.mkdir(map_path)
+        env_dims = (20, 30, 50)
+        for env_dim in env_dims:
+            print("Generating maps according to speicifcations ...")
+            map_path = "./maps"
+            if not os.path.exists(map_path):
+                os.mkdir(map_path)
 
-        #######################
-        # Generate Random Map #
-        #######################
-        random_map = [[random.random() if (x,y) != self._start_pos else 0 for y in range(env_dim)] for x in range(env_dim)]
+            #######################
+            # Generate Random Map #
+            #######################
+            random_map = [[random.random() if (x,y) != self._start_pos else 0 for y in range(env_dim)] for x in range(env_dim)]
 
-        #############################
-        # Generate Checkerboard Map #
-        #############################
-        x = np.linspace(0, 5 * np.pi, env_dim)
-        y = np.linspace(0, 5 * np.pi, env_dim)
-        x, y = np.meshgrid(x, y)
-        # combining sine and cosine functions
-        checkerboard_map= np.sin(x) * np.cos(y)
-        # Normalize to 0-1 range
-        checkerboard_map = (checkerboard_map - checkerboard_map.min()) / (checkerboard_map.max() - checkerboard_map.min())
-        ##################################
-        # Generate Map with Obvious Path #
-        ##################################
-        sx, sy = (0,0)
-        gx, gy = (env_dim-1, env_dim-1)
+            #############################
+            # Generate Checkerboard Map #
+            #############################
+            x = np.linspace(0, 5 * np.pi, env_dim)
+            y = np.linspace(0, 5 * np.pi, env_dim)
+            x, y = np.meshgrid(x, y)
+            # combining sine and cosine functions
+            checkerboard_map= np.sin(x) * np.cos(y)
+            # Normalize to 0-1 range
+            checkerboard_map = (checkerboard_map - checkerboard_map.min()) / (checkerboard_map.max() - checkerboard_map.min())
+            ##################################
+            # Generate Map with Obvious Path #
+            ##################################
+            sx, sy = (int(env_dim/2), 0)
+            gx, gy = (int(env_dim/2), env_dim-1)
 
-        easy_map = [[random.random() if (x,y) != self._start_pos else 0 for y in range(env_dim)] for x in range(env_dim)]
+            easy_map = [[random.random() if (x,y) != self._start_pos else 0 for y in range(env_dim)] for x in range(env_dim)]
 
-        x, y = sx, sy
-        easy_map[x][y] = 0
-
-        def manhattan(a, b):
-            return abs(a[0]-b[0]) + abs(a[1]-b[1])
-
-        while (x, y) != (gx, gy):
-            candidates = []
-            for dx, dy in [(1,0), (-1,0), (0,1), (0,-1)]:  # von Neumann
-                nx, ny = x + dx, y + dy
-                if 0 <= nx < env_dim and 0 <= ny < env_dim:
-                    if manhattan((nx, ny), (gx, gy)) < manhattan((x, y), (gx, gy)):
-                        candidates.append((nx, ny))
-
-            # pick randomly among distance-reducing moves
-            x, y = random.choice(candidates)
+            x, y = sx, sy
             easy_map[x][y] = 0
 
-        #############################
-        # Generate Meandering River #
-        #############################
-        # Initialize the obstacle map
-        meandering_river_map = np.zeros((env_dim, env_dim))
+            def manhattan(a, b):
+                return abs(a[0]-b[0]) + abs(a[1]-b[1])
 
-        # Parameters for the river path
-        river_width = 7
-        t = np.linspace(0, 1, env_dim)
-        x_center = env_dim / 2
-        amplitude = env_dim / 3
+            while (x, y) != (gx, gy):
+                candidates = []
+                for dx, dy in [(1,0), (-1,0), (0,1), (0,-1)]:  # von Neumann
+                    nx, ny = x + dx, y + dy
+                    if 0 <= nx < env_dim and 0 <= ny < env_dim:
+                        if manhattan((nx, ny), (gx, gy)) < manhattan((x, y), (gx, gy)):
+                            candidates.append((nx, ny))
 
-        # Generate smooth S-shaped path
-        x_path = x_center + amplitude * np.sin(2 * np.pi * t)
+                # pick randomly among distance-reducing moves
+                x, y = random.choice(candidates)
+                easy_map[x][y] = 0
 
-        # Mark the river path on the obstacle map
-        for y, x in enumerate(x_path):
-            x_start = int(x - river_width / 2)
-            x_end = int(x + river_width / 2)
-            meandering_river_map[y, max(x_start, 0):min(x_end, env_dim)] = 1
+            #############################
+            # Generate Meandering River #
+            #############################
+            # Initialize the obstacle map
+            meandering_river_map = np.zeros((env_dim, env_dim))
 
-        # Apply Gaussian filter to create gradient effect
-        meandering_river_map = gaussian_filter(meandering_river_map, sigma=3)
+            # Parameters for the river path
+            river_width = 7
+            t = np.linspace(0, 1, env_dim)
+            x_center = env_dim / 2
+            amplitude = env_dim / 3
 
-        # Invert colors: black parts white and white parts black
-        meandering_river_map = 1 - meandering_river_map
+            # Generate smooth S-shaped path
+            x_path = x_center + amplitude * np.sin(2 * np.pi * t)
 
-        # Normalize to 0-1 range
-        meandering_river_map = (meandering_river_map - np.min(meandering_river_map)) / (np.max(meandering_river_map) - np.min(meandering_river_map))
-        
-        # Cast to normal list
-        meandering_river_map = meandering_river_map.tolist()
+            # Mark the river path on the obstacle map
+            for y, x in enumerate(x_path):
+                x_start = int(x - river_width / 2)
+                x_end = int(x + river_width / 2)
+                meandering_river_map[y, max(x_start, 0):min(x_end, env_dim)] = 1
 
-        # Save all maps to files
-        with open(os.path.join(map_path, f"random_map_{env_dim}x{env_dim}.pickle"), "wb") as f:
-            pickle.dump(random_map, f)
+            # Apply Gaussian filter to create gradient effect
+            meandering_river_map = gaussian_filter(meandering_river_map, sigma=3)
 
-        with open(os.path.join(map_path, f"checkerboard_map_{env_dim}x{env_dim}.pickle"), "wb") as f:
-            pickle.dump(checkerboard_map, f)
+            # Invert colors: black parts white and white parts black
+            meandering_river_map = 1 - meandering_river_map
 
-        with open(os.path.join(map_path, f"easy_map_{env_dim}x{env_dim}.pickle"), "wb") as f:
-            pickle.dump(easy_map, f)
-        
-        with open(os.path.join(map_path, f"meandering_river_map_{env_dim}x{env_dim}.pickle"), "wb") as f:
-            pickle.dump(meandering_river_map, f)
+            # Normalize to 0-1 range
+            meandering_river_map = (meandering_river_map - np.min(meandering_river_map)) / (np.max(meandering_river_map) - np.min(meandering_river_map))
+            
+            # Cast to normal list
+            meandering_river_map = meandering_river_map.tolist()
+
+            # Save all maps to files
+            with open(os.path.join(map_path, f"random_map_{env_dim}x{env_dim}.pickle"), "wb") as f:
+                pickle.dump(random_map, f)
+
+            with open(os.path.join(map_path, f"checkerboard_map_{env_dim}x{env_dim}.pickle"), "wb") as f:
+                pickle.dump(checkerboard_map, f)
+
+            with open(os.path.join(map_path, f"easy_map_{env_dim}x{env_dim}.pickle"), "wb") as f:
+                pickle.dump(easy_map, f)
+            
+            with open(os.path.join(map_path, f"meandering_river_map_{env_dim}x{env_dim}.pickle"), "wb") as f:
+                pickle.dump(meandering_river_map, f)

@@ -3,7 +3,7 @@
 import os
 import shutil
 from node import Node
-from analyzer import Analyzer
+#from analyzer import Analyzer
 import pandas as pd
 import pickle
 from time import time
@@ -88,8 +88,8 @@ class Logger():
             with open(f"{self._log_path}/{i}-values.pickle", "wb") as f:
                 pickle.dump(data,f)
 
-            Analyzer.visualize_path_with_shifts(solution._controller._environment._environment, path, shifts, (0,0), solution._controller._environment._goal, f"{self._log_path}/path-{i}.png")
-            Analyzer.save_path_as_gif(self._root._controller._environment, self._root._controller._start_pos, moves, f"{self._log_path}/path-{i}.gif")
+            #Analyzer.visualize_path_with_shifts(solution._controller._environment._environment, path, shifts, (0,0), solution._controller._environment._goal, f"{self._log_path}/path-{i}.png")
+            #Analyzer.save_path_as_gif(self._root._controller._environment, self._root._controller._start_pos, moves, f"{self._log_path}/path-{i}.gif")
 
     def create_header_file(self) -> None:
         """Creates a header file in the log directory containing all hyperparameters."""

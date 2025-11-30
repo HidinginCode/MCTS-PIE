@@ -9,8 +9,6 @@ import multiprocessing as mp
 import os
 import random
 import numpy as np
-from tqdm import tqdm
-from analyzer import Analyzer
 import copy
 from logger import Logger
 
@@ -340,6 +338,85 @@ class MctsTree():
         leaf._values = dict(chosen_node._values)
         return used_move_counter
 
+    def iterative_heavy_distance_weight_rollout(self, leaf: Node, simulations: int, maximum_moves: int, remaining_budget: int) -> int:
+        """Iterative version of the heavy distance weight rollout to look into performance.
+
+        Args:
+            leaf (Node): Leaf to simulate.
+            simulations (int): Number of iterative simulations.
+            maximum_moves (int): Maximum number of moves per simulation.
+            remaining_budget (int): Remaining simulation budget.
+        
+        Returns:
+            Number of moves used for simulation
+        """
+        results = []
+
+        used_move_counter = 0
+        for _ in range(simulations):
+
+            # Clone so we have independent simulation
+            leaf_copy = leaf.clone()
+            controller = leaf_copy._controller
+            start = controller._start_pos
+            goal = controller._environment._goal
+            env = controller._environment._environment
+
+            # Precompute constant
+            dxg = start[0] - goal[0]
+            dyg = start[1] - goal[1]
+            roundtrip_back = (dxg if dxg >= 0 else -dxg) + (dyg if dyg >= 0 else -dyg)
+
+            def distance(pos):
+                """Nested manhattan distance roundtrip function for speed."""
+                x, y = pos
+                if not controller._goal_collected:
+                    d1 = x - goal[0]
+                    d2 = y - goal[1]
+                    dist_to_goal = (d1 if d1 >= 0 else -d1) + (d2 if d2 >= 0 else -d2)
+                    return dist_to_goal + roundtrip_back
+                else:
+                    d1 = x - start[0]
+                    d2 = y - start[1]
+                    return (d1 if d1 >= 0 else -d1) + (d2 if d2 >= 0 else -d2)
+
+            for _ in range(maximum_moves):
+
+                # Break if we reached terminal state
+                if leaf_copy.is_terminal_state() or used_move_counter >= remaining_budget:
+                    break
+
+                # Get needed parts of calculation and prepare move list
+                current_pos = controller._current_pos
+                current_distance_to_goal = distance(current_pos)
+                distance_minimizing_moves = []
+                weight_for_distance_min_moves = []
+                valid_moves = leaf_copy._controller.get_all_valid_pairs()
+
+                # Get moves that do not increase distance
+                for move_dir, shifting_dir in valid_moves:
+                    new_pos = (current_pos[0] + move_dir[0],
+                            current_pos[1] + move_dir[1])
+                    new_distance_to_goal = distance(new_pos)
+                    if new_distance_to_goal <= current_distance_to_goal:
+                        distance_minimizing_moves.append((move_dir, shifting_dir))
+                        weight_for_distance_min_moves.append(env[new_pos[0]][new_pos[1]])
+
+                # Choose move that has least weight
+                min_index = min(range(len(weight_for_distance_min_moves)), key=weight_for_distance_min_moves.__getitem__)
+                move_direction, shift_direction = distance_minimizing_moves[min_index]
+                controller.move(move_direction, shift_direction)
+                used_move_counter += 1
+
+            results.append(leaf_copy.clone())
+
+            if used_move_counter >= remaining_budget:
+                break
+        
+        chosen_node = random.choice(Helper.determine_pareto_front_from_nodes(results))
+        leaf._values = dict(chosen_node._values)
+        return used_move_counter
+
     @staticmethod
     def path_domination(path1: list, path2: list) -> bool:
         """Returns if path1 dominates path2, using the last value entry of the paths.
@@ -439,9 +516,10 @@ class MctsTree():
         match rollout_func:
             case 0: rollout_function = self.light_rollout
             case 1: rollout_function = self.iterative_heavy_distance_rollout
+            case 2: rollout_function = self.iterative_heavy_distance_weight_rollout
             case _: raise ValueError("Did not supply a suitable rollout function indicator")
 
-        log = Logger(self._root._controller._environment._map_type, self._root._controller._environment._env_dim, self._root._controller._start_pos, self._root._controller._environment._goal, total_budget, per_sim_budget, simulations_per_child, tree_sel_function.__name__, root_sel_function.__name__, self._max_solutions, rollout_func, self._seed, self._root)
+        log = Logger(self._root._controller._environment._map_type, self._root._controller._environment._env_dim, self._root._controller._start_pos, self._root._controller._environment._goal, total_budget, per_sim_budget, simulations_per_child, tree_sel_function.__name__, root_sel_function.__name__, self._max_solutions, rollout_function.__name__, self._seed, self._root)
         print("Starting search ...")
         # Make list for found solutions
             # Set root to initial root
