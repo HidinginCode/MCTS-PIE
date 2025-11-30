@@ -26,16 +26,16 @@ ARCHIVES=(20)
 
 PARAM_FILE="$(pwd)/param_grid.csv"
 
-echo "Generating parameter grid → $PARAM_FILE"
+echo "Generating parameter grid -> $PARAM_FILE"
 echo "map,env_dim,budget,per_sim,num_sims,tree_sel,root_sel,rollout,seed,archive,start_x,start_y,goal_x,goal_y" \
     > "$PARAM_FILE"
 
 for MAP in "${MAP_TYPES[@]}"; do
 for ENV_DIM in "${ENV_DIMS[@]}"; do
 
-    START_X=$((ENV_DIM / 2))
+    START_X=0
     START_Y=0
-    GOAL_X=$((ENV_DIM / 2))
+    GOAL_X=$((ENV_DIM - 1))
     GOAL_Y=$((ENV_DIM - 1))
 
 for BUDGET in "${TOTAL_BUDGETS[@]}"; do
