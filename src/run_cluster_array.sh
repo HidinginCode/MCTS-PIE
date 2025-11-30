@@ -9,7 +9,7 @@ BATCH_SIZE=2000           # Larger batch size → fewer total jobs
 # PARAMETER SPACE
 ############################################################
 
-MAP_TYPES=("random_map" "easy_map" "checkerboard_map" "meandering_river_map")
+MAP_TYPES=("random_map" "easy_map" "checkerboard_map" "bubble_in_the_middle_map")
 ENV_DIMS=(20 30 50)
 TOTAL_BUDGETS=(2500000 5000000 10000000)
 PER_SIM_BUDGETS=(30 50 100)

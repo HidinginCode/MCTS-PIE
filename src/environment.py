@@ -121,8 +121,8 @@ class Environment():
             ##################################
             # Generate Map with Obvious Path #
             ##################################
-            sx, sy = (int(env_dim/2), 0)
-            gx, gy = (int(env_dim/2), env_dim-1)
+            sx, sy = (0, 0)
+            gx, gy = (env_dim-1, env_dim-1)
 
             easy_map = [[random.random() if (x,y) != self._start_pos else 0 for y in range(env_dim)] for x in range(env_dim)]
 
@@ -144,38 +144,32 @@ class Environment():
                 x, y = random.choice(candidates)
                 easy_map[x][y] = 0
 
-            #############################
-            # Generate Meandering River #
-            #############################
+            #################################
+            # Generate Bubble in the Middle #
+            #################################
             # Initialize the obstacle map
-            meandering_river_map = np.zeros((env_dim, env_dim))
+            # Center of the grid
+            center_x, center_y = env_dim // 2, env_dim // 2
 
-            # Parameters for the river path
-            river_width = 7
-            t = np.linspace(0, 1, env_dim)
-            x_center = env_dim / 2
-            amplitude = env_dim / 3
+            # Create a distance matrix from the center
+            x = np.arange(env_dim)
+            y = np.arange(env_dim)
+            xx, yy = np.meshgrid(x, y)
+            distances = np.sqrt((xx - center_x)**2 + (yy - center_y)**2)
 
-            # Generate smooth S-shaped path
-            x_path = x_center + amplitude * np.sin(2 * np.pi * t)
+            # Parameters for the normal distribution
+            mean = 0  # center of the distribution
+            std_dev = np.max(distances) / 2  # spread of the distribution
 
-            # Mark the river path on the obstacle map
-            for y, x in enumerate(x_path):
-                x_start = int(x - river_width / 2)
-                x_end = int(x + river_width / 2)
-                meandering_river_map[y, max(x_start, 0):min(x_end, env_dim)] = 1
+            # Generate obstacle weights using the normal distribution
+            bubble_in_the_middle_map = np.exp(-(distances - mean)**2 / (2 * std_dev**2))
 
-            # Apply Gaussian filter to create gradient effect
-            meandering_river_map = gaussian_filter(meandering_river_map, sigma=3)
+            # Normalize the obstacle weights to the range [0, 1]
+            bubble_in_the_middle_map = (bubble_in_the_middle_map - np.min(bubble_in_the_middle_map)) / (np.max(bubble_in_the_middle_map) - np.min(bubble_in_the_middle_map))
 
-            # Invert colors: black parts white and white parts black
-            meandering_river_map = 1 - meandering_river_map
+            # Optionally, round the values to 2 decimal places
+            bubble_in_the_middle_map = np.round(bubble_in_the_middle_map, 2)
 
-            # Normalize to 0-1 range
-            meandering_river_map = (meandering_river_map - np.min(meandering_river_map)) / (np.max(meandering_river_map) - np.min(meandering_river_map))
-            
-            # Cast to normal list
-            meandering_river_map = meandering_river_map.tolist()
 
             # Save all maps to files
             with open(os.path.join(map_path, f"random_map_{env_dim}x{env_dim}.pickle"), "wb") as f:
@@ -187,5 +181,5 @@ class Environment():
             with open(os.path.join(map_path, f"easy_map_{env_dim}x{env_dim}.pickle"), "wb") as f:
                 pickle.dump(easy_map, f)
             
-            with open(os.path.join(map_path, f"meandering_river_map_{env_dim}x{env_dim}.pickle"), "wb") as f:
-                pickle.dump(meandering_river_map, f)
+            with open(os.path.join(map_path, f"bubble_in_the_middle_map_{env_dim}x{env_dim}.pickle"), "wb") as f:
+                pickle.dump(bubble_in_the_middle_map, f)
