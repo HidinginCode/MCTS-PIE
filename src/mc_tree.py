@@ -11,6 +11,7 @@ import random
 import numpy as np
 import copy
 from logger import Logger
+import math
 
 
 class MctsTree():
@@ -48,11 +49,12 @@ class MctsTree():
         """
         return self._root
 
-    def tree_policy(self, root: Node) -> Node | None:
+    def tree_policy(self, root: Node, tree_sel_func: function) -> Node | None:
         """Tree policy that selects the path from the root to a leaf.
 
         Args:
             root: Root to start policy from
+            tree_sel_func: Function used to select next node in tree
 
         Returns:
             Node | None: Either leaf node or none if i.e. solution was selected.
@@ -72,7 +74,7 @@ class MctsTree():
             # At this point we know that current_node is neither terminal nor has any expansion left
             # Safety check for children
             if current_node._children:
-                current_node = self.ucb_child_selection(current_node)
+                current_node = tree_sel_func(current_node)
 
     def pareto_path_child_selection_cd(self, node: Node) -> Node:
         """Method that selects a child from pareto_paths using the crowding distance.
@@ -195,26 +197,28 @@ class MctsTree():
         c = 1.0  # exploration coefficient
 
         for child in children:
-            # Force exploration of never-visited children
             if child._visits == 0:
-                # For minimization: make them look extremely good in all dims
+                # force min priority on all objectives → guaranteed exploration
                 child._ucb_values = {d: -np.inf for d in dims}
                 continue
 
-            # Normalized mean costs in [0,1]
-            norm_vals = {
+            # normalized values
+            norm = {
                 d: (child._values[d] - mins[d]) / ranges[d]
                 for d in dims
             }
 
-            # Scalar exploration term (same for all dims, but on normalized scale)
-            exploration_term = c * np.sqrt(2 * logN / child._visits)
-
-            # For minimization: smaller is better, so subtract exploration
-            child._ucb_values = {
-                d: norm_vals[d] - exploration_term
-                for d in dims
+            # multi-objective adaptive exploration penalties
+            # distance gets weaker exploration (since it already drives)
+            alpha = {
+                "distance_to_goal": 0.3,
+                "step_count": 1.0,
+                "weight_shifted": 1.0,
             }
+
+            for d in dims:
+                explore = alpha[d] * np.sqrt(2 * logN / child._visits)
+                child._ucb_values[d] = norm[d] - explore
 
         # Determine Pareto front in UCB space and pick one child
         pareto_front = Helper.determine_pareto_front_from_nodes(children, True)
@@ -263,77 +267,145 @@ class MctsTree():
         return used_move_counter
 
 
-    def iterative_heavy_distance_rollout(self, leaf: Node, simulations: int, maximum_moves: int, remaining_budget: int) -> int:
-        """Iterative version of the heavy distance rollout to look into performance.
+    def iterative_heavy_angular_rollout(self, leaf: Node, simulations: int, maximum_moves: int, remaining_budget: int) -> int:
+        """
+        Iterative rollout method that:
+        1) Samples points in a square radius around the current position
+        2) Chooses a sampled point that is closer to the goal than the current position
+        3) If none exists → fallback to von Neumann neighbors (just like heavy_distance_rollout)
 
         Args:
-            leaf (Node): Leaf to simulate.
-            simulations (int): Number of iterative simulations.
-            maximum_moves (int): Maximum number of moves per simulation.
-            remaining_budget (int): Remaining simulation budget.
-        
-        Returns:
-            Number of moves used for simulation
-        """
-        results = []
+            leaf (Node): Leaf node to simulate from.
+            simulations (int): Number of rollouts.
+            maximum_moves (int): Max moves per rollout.
+            remaining_budget (int): Remaining global budget.
 
+        Returns:
+            int: total moves used across rollout
+        """
+
+        radius = max(2, min(8, leaf._controller._environment.env_dim // 6))
+
+        # Precomputed directional vectors (8  directions)
+        DIRS = [
+            (1, 0), (1, 1), (0, 1), (-1, 1),
+            (-1, 0), (-1, -1), (0, -1), (1, -1)
+        ]
+
+        # How many directions to sample
+        NUM_DIR_SAMPLES = 4
+
+        results = []
         used_move_counter = 0
+
         for _ in range(simulations):
 
-            # Clone so we have independent simulation
             leaf_copy = leaf.clone()
             controller = leaf_copy._controller
+            env_dim = controller._environment.env_dim
             start = controller._start_pos
             goal = controller._environment._goal
 
-            # Precompute constant
-            dxg = start[0] - goal[0]
-            dyg = start[1] - goal[1]
-            roundtrip_back = (dxg if dxg >= 0 else -dxg) + (dyg if dyg >= 0 else -dyg)
-
-            def distance(pos):
-                """Nested manhattan distance roundtrip function for speed."""
-                x, y = pos
-                if not controller._goal_collected:
-                    d1 = x - goal[0]
-                    d2 = y - goal[1]
-                    dist_to_goal = (d1 if d1 >= 0 else -d1) + (d2 if d2 >= 0 else -d2)
-                    return dist_to_goal + roundtrip_back
-                else:
-                    d1 = x - start[0]
-                    d2 = y - start[1]
-                    return (d1 if d1 >= 0 else -d1) + (d2 if d2 >= 0 else -d2)
+            def manhattan(a, b):
+                dx = a[0] - b[0]
+                dy = a[1] - b[1]
+                return (dx if dx >= 0 else -dx) + (dy if dy >= 0 else -dy)
 
             for _ in range(maximum_moves):
 
-                # Break if we reached terminal state
+                # Stop if terminal or out of budget
                 if leaf_copy.is_terminal_state() or used_move_counter >= remaining_budget:
                     break
 
-                # Get needed parts of calculation and prepare move list
-                current_pos = controller._current_pos
-                current_distance_to_goal = distance(current_pos)
-                distance_minimizing_moves = []
-                valid_moves = leaf_copy._controller.get_all_valid_pairs()
+                cx, cy = controller._current_pos
+                gx, gy = (start if controller._goal_collected else goal)
+                current_dist = manhattan((cx, cy), (gx, gy))
 
-                # Get moves that do not increase distance
-                for move_dir, shifting_dir in valid_moves:
-                    new_pos = (current_pos[0] + move_dir[0],
-                            current_pos[1] + move_dir[1])
-                    new_distance_to_goal = distance(new_pos)
-                    if new_distance_to_goal <= current_distance_to_goal:
-                        distance_minimizing_moves.append((move_dir, shifting_dir))
+                
+                # sample only directions that point toward the goal
+                vgx = gx - cx
+                vgy = gy - cy
 
-                # Randomly chose from moves
-                move_direction, shift_direction = random.choice(distance_minimizing_moves)
-                controller.move(move_direction, shift_direction)
+                filtered_dirs = []
+                for dx, dy in DIRS:
+                    # direction should point toward goal (dot product > 0)
+                    dot = dx * vgx + dy * vgy
+                    if dot <= 0:
+                        continue
+
+                    # remove purely horizontal/vertical collinearity
+                    #if (dx == 0 and vgx == 0) or (dy == 0 and vgy == 0):
+                    #    continue
+
+                    filtered_dirs.append((dx, dy))
+
+                # if filtering removed everything, fallback to all directions
+                if not filtered_dirs:
+                    filtered_dirs = DIRS
+
+                # choose a few directions to sample
+                chosen_dirs = random.sample(filtered_dirs, min(NUM_DIR_SAMPLES, len(filtered_dirs)))
+
+                # sample targets using directions
+                better_samples = []
+                for dx, dy in chosen_dirs:
+                    tx = cx + dx * radius
+                    ty = cy + dy * radius
+
+                    if 0 <= tx < env_dim and 0 <= ty < env_dim:
+                        new_dist = manhattan((tx, ty), (gx, gy))
+                        if new_dist < current_dist:
+                            better_samples.append((tx, ty, new_dist))
+
+                # If we found good sample, greedily move toward best one
+                if better_samples:
+                    better_samples.sort(key=lambda t: t[2])
+                    target_x, target_y, _ = better_samples[0]
+
+                    valid_pairs = controller.get_all_valid_pairs()
+                    best_pair = None
+                    best_dist = float("inf")
+
+                    for move_dir, shift_dir in valid_pairs:
+                        nx = cx + move_dir[0]
+                        ny = cy + move_dir[1]
+                        d = manhattan((nx, ny), (target_x, target_y))
+                        if d < best_dist:
+                            best_dist = d
+                            best_pair = (move_dir, shift_dir)
+
+                    controller.move(best_pair[0], best_pair[1])
+                    used_move_counter += 1
+                    continue
+
+
+                # Fallback -> greedy toward goal
+                valid_pairs = controller.get_all_valid_pairs()
+                best_pair = None
+                best_goal_dist = float("inf")
+
+                for move_dir, shift_dir in valid_pairs:
+                    nx = cx + move_dir[0]
+                    ny = cy + move_dir[1]
+                    d = manhattan((nx, ny), (gx, gy))
+                    if d < best_goal_dist:
+                        best_goal_dist = d
+                        best_pair = (move_dir, shift_dir)
+
+                if best_pair is not None:
+                    controller.move(best_pair[0], best_pair[1])
+                    used_move_counter += 1
+                    continue
+
+                # Last fallback ->  random move
+                move_dir, shift_dir = random.choice(valid_pairs)
+                controller.move(move_dir, shift_dir)
                 used_move_counter += 1
 
             results.append(leaf_copy.clone())
-
             if used_move_counter >= remaining_budget:
                 break
-        
+
         chosen_node = random.choice(Helper.determine_pareto_front_from_nodes(results))
         leaf._values = dict(chosen_node._values)
         return used_move_counter
@@ -351,10 +423,8 @@ class MctsTree():
             Number of moves used for simulation
         """
         results = []
-
         used_move_counter = 0
         for _ in range(simulations):
-
             # Clone so we have independent simulation
             leaf_copy = leaf.clone()
             controller = leaf_copy._controller
@@ -368,17 +438,19 @@ class MctsTree():
             roundtrip_back = (dxg if dxg >= 0 else -dxg) + (dyg if dyg >= 0 else -dyg)
 
             def distance(pos):
-                """Nested manhattan distance roundtrip function for speed."""
                 x, y = pos
-                if not controller._goal_collected:
-                    d1 = x - goal[0]
-                    d2 = y - goal[1]
-                    dist_to_goal = (d1 if d1 >= 0 else -d1) + (d2 if d2 >= 0 else -d2)
-                    return dist_to_goal + roundtrip_back
+
+                if controller._goal_collected:
+                    gx, gy = start
                 else:
-                    d1 = x - start[0]
-                    d2 = y - start[1]
-                    return (d1 if d1 >= 0 else -d1) + (d2 if d2 >= 0 else -d2)
+                    gx, gy = goal
+
+                dx = x - gx
+                dy = y - gy
+
+                # Branchless abs via comparison
+                return (dx if dx >= 0 else -dx) + (dy if dy >= 0 else -dy)
+
 
             for _ in range(maximum_moves):
 
@@ -392,15 +464,25 @@ class MctsTree():
                 distance_minimizing_moves = []
                 weight_for_distance_min_moves = []
                 valid_moves = leaf_copy._controller.get_all_valid_pairs()
+                if not controller._goal_collected:
+                    alligned_axis = current_pos[0] == goal[0] or current_pos[1] == goal[1]
+                else:
+                    alligned_axis = current_pos[0] == start[0] or current_pos[1] == start[1]
 
                 # Get moves that do not increase distance
+                slack = 1 # Allows for moves that are non optimal -> breaks problem that we have with straigt paths on alligned objectives
                 for move_dir, shifting_dir in valid_moves:
                     new_pos = (current_pos[0] + move_dir[0],
                             current_pos[1] + move_dir[1])
                     new_distance_to_goal = distance(new_pos)
-                    if new_distance_to_goal <= current_distance_to_goal:
-                        distance_minimizing_moves.append((move_dir, shifting_dir))
-                        weight_for_distance_min_moves.append(env[new_pos[0]][new_pos[1]])
+                    if alligned_axis: # Allow slack when axis alligned to prevent straight paths
+                        if new_distance_to_goal <= current_distance_to_goal + slack:
+                            distance_minimizing_moves.append((move_dir, shifting_dir))
+                            weight_for_distance_min_moves.append(env[new_pos[0]][new_pos[1]])
+                    else:
+                        if new_distance_to_goal <= current_distance_to_goal:
+                            distance_minimizing_moves.append((move_dir, shifting_dir))
+                            weight_for_distance_min_moves.append(env[new_pos[0]][new_pos[1]])
 
                 # Choose move that has least weight
                 min_index = min(range(len(weight_for_distance_min_moves)), key=weight_for_distance_min_moves.__getitem__)
@@ -515,7 +597,7 @@ class MctsTree():
         
         match rollout_func:
             case 0: rollout_function = self.light_rollout
-            case 1: rollout_function = self.iterative_heavy_distance_rollout
+            case 1: rollout_function = self.iterative_heavy_angular_rollout
             case 2: rollout_function = self.iterative_heavy_distance_weight_rollout
             case _: raise ValueError("Did not supply a suitable rollout function indicator")
 
@@ -531,7 +613,7 @@ class MctsTree():
 
                 # Use tree policy
                 # Reminder: Tree policy returns none if selected node has reached goal or we are in unsolvable state
-                current_node = self.tree_policy(root = current_root)
+                current_node = self.tree_policy(root = current_root, tree_sel_func=tree_sel_function)
 
                 if current_node is not None:
                     # Expand the leaf (expand method automatically adds it to the current_nodes children and also returns it)
@@ -542,14 +624,14 @@ class MctsTree():
 
                         if not child.is_terminal_state():
                             # Do simulations and add used budget onto sim counter
-                            used_simulation_counter+=self.iterative_heavy_distance_rollout(child, simulations_per_child, per_sim_budget, total_budget-used_simulation_counter)
+                            used_simulation_counter+=rollout_function(child, simulations_per_child, per_sim_budget, total_budget-used_simulation_counter)
 
                         self.backpropagate(child, current_root)
                     else:
                         used_simulation_counter += per_sim_budget # For fast convergence in the end
 
             # Current root umsetzen
-            current_root = Helper.epsilon_clustering_for_nodes(current_root)
+            current_root = root_sel_function(current_root)
             #current_root = random.choice(Helper.determine_pareto_front_from_nodes(current_root._children.values()))
             #current_root = self.pareto_path_child_selection_hv(current_root)
             print(f"Root was set to {current_root._controller._current_pos}")

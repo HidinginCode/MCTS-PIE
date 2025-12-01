@@ -249,21 +249,23 @@ class Controller():
         Returns:
             float: Manhattan distance to goal
         """
-        current_pos = self._current_pos
-        goal = self._environment._goal
-        start = self._start_pos
-        goal_collected = self._goal_collected
+        x, y = self._current_pos
+        gx, gy = self._environment._goal
+        sx, sy = self._start_pos
 
-        # Manual Manhattan dist (faster than lambda + tuple unpack)
-        dx1 = current_pos[0] - goal[0]
-        dy1 = current_pos[1] - goal[1]
-        dist_to_goal = (dx1 if dx1 >= 0 else -dx1) + (dy1 if dy1 >= 0 else -dy1)
+        if not self._goal_collected:
+            # dist(current -> goal)
+            dx1 = x - gx
+            dy1 = y - gy
+            dist_to_goal = (dx1 if dx1 >= 0 else -dx1) + (dy1 if dy1 >= 0 else -dy1)
 
-        if not goal_collected:
-            dx2 = start[0] - goal[0]
-            dy2 = start[1] - goal[1]
+            # dist(goal -> start) - constant
+            dx2 = gx - sx
+            dy2 = gy - sy
             return dist_to_goal + (dx2 if dx2 >= 0 else -dx2) + (dy2 if dy2 >= 0 else -dy2)
+
         else:
-            dx3 = current_pos[0] - start[0]
-            dy3 = current_pos[1] - start[1]
-            return (dx3 if dx3 >= 0 else -dx3) + (dy3 if dy3 >= 0 else -dy3)
+            # dist(current -> start)
+            dx = x - sx
+            dy = y - sy
+            return (dx if dx >= 0 else -dx) + (dy if dy >= 0 else -dy)
