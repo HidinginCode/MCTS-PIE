@@ -585,8 +585,6 @@ class MctsTree():
         """
         match root_selection:
             case 0: root_sel_function = Helper.epsilon_clustering_for_nodes
-            case 1: root_sel_function = self.pareto_path_child_selection_hv
-            case 2: root_sel_function = self.pareto_path_child_selection_cd
             case _: raise ValueError("Did not supply a suitable root selection indicator")
         
         match tree_selection:
