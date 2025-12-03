@@ -98,7 +98,7 @@ if __name__ == "__main__":
     parser.add_argument("--total_memory")
     args = parser.parse_args()
 
-    total_memory_mb = int(args.total_memory.rstrip("G")) * 1024
+    total_memory_mb = 256 * 1024
     processes = 24
 
     print(f"Using {24} workers (memory-safe).")
