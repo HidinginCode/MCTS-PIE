@@ -1,8 +1,8 @@
 #!/bin/bash
 #SBATCH --job-name=mcts_mp
 #SBATCH --partition=members
-#SBATCH --cpus-per-task=32
-#SBATCH --mem=64G
+#SBATCH --cpus-per-task=24
+#SBATCH --mem=256G
 #SBATCH --output=logs/mp.out
 #SBATCH --error=logs/mp.err
 

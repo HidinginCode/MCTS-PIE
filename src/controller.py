@@ -158,7 +158,7 @@ class Controller():
 
         # If one of both positions is invalid return false
         if not (self.is_valid_positon(new_pos) and self.is_valid_positon(new_shift_pos)):
-            print("INVALID MOVE " * 100)
+            #print("INVALID MOVE " * 100)
             return False
 
         # Move agent to new position, increase steps and calculate new distance to goal
@@ -172,6 +172,8 @@ class Controller():
         self._environment._environment[new_shift_pos[0]][new_shift_pos[1]] += self._environment._environment[new_pos[0]][new_pos[1]]
         self._weight_shifted += self._environment._environment[new_pos[0]][new_pos[1]]
         self._environment._environment[new_pos[0]][new_pos[1]] = 0
+
+        return True
 
     def get_all_valid_pairs(self) -> list[tuple]:
         """Returns a list of all valid movement and shfiting directions pairs at the current position.
