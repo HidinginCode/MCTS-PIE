@@ -96,7 +96,7 @@ class Environment():
         Args:
             env_dim (int, optional): Defines the environment size. Defaults to 10.
         """
-        env_dims = (20, 30, 50)
+        env_dims = (20, 35, 50)
         for env_dim in env_dims:
             print("Generating maps according to speicifcations ...")
             map_path = "./maps"
@@ -107,7 +107,7 @@ class Environment():
             # Generate Random Map #
             #######################
             random_map = [[random.random() if (x,y) != self._start_pos else 0 for y in range(env_dim)] for x in range(env_dim)]
-
+            random_map[0][env_dim//2] = 0
             #############################
             # Generate Checkerboard Map #
             #############################
@@ -119,6 +119,7 @@ class Environment():
             # Normalize to 0-1 range
             checkerboard_map = (checkerboard_map - checkerboard_map.min()) / (checkerboard_map.max() - checkerboard_map.min())
             checkerboard_map = checkerboard_map.tolist()
+            checkerboard_map[0][env_dim//2] = 0
 
             ##################################
             # Generate Map with Obvious Path #
@@ -175,6 +176,7 @@ class Environment():
             # Normalize to 0-1 range
             meandering_river = (meandering_river - np.min(meandering_river)) / (np.max(meandering_river) - np.min(meandering_river))
             meandering_river = meandering_river.tolist()
+            meandering_river[0][env_dim//2] = 0
 
 
             # Save all maps to files

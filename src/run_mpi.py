@@ -1,22 +1,44 @@
-import multiprocessing as mp
+#!/usr/bin/env python3
+from mpi4py import MPI
 import subprocess
-import argparse
 import os
+
+# -------------------------------------------------
+# MPI initialization
+# -------------------------------------------------
+comm = MPI.COMM_WORLD
+rank = comm.Get_rank()     # this worker's ID
+size = comm.Get_size()     # total workers
+root = 0
+
+if rank == root:
+    print(f"[MPI] Running with {size} workers")
+
+# -------------------------------------------------
+# Create output directory only once
+# -------------------------------------------------
+if rank == root:
+    os.makedirs("mpi_logs", exist_ok=True)
+comm.Barrier()
+
+
+# -------------------------------------------------
+# Build all parameter combinations
+# -------------------------------------------------
 
 PARAMS = []
 
 MAP_TYPES = ["random_map"]
-ENV_DIMS = [20, 30, 50]
-TOTAL_BUDGETS = [1000000, 5000000, 10000000]
-PER_SIM_BUDGETS = [30, 50, 100]
-NUM_SIMS_LIST = [100, 250, 500]
+ENV_DIMS = [20, 35, 50]
+TOTAL_BUDGETS = [1000000, 3000000, 5000000, 7000000, 9000000, 11000000]
+PER_SIM_BUDGETS = [30, 50, 70, 90, 110, 130]
+NUM_SIMS_LIST = [100, 300, 500, 700, 900, 1100]
 TREE_METHODS = [0, 1, 2]
 ROOT_METHODS = [0]
 ROLLOUT_METHODS = [0, 1, 2]
-SEEDS = [42, 420, 1337, 2024, 7777, 9999, 12345, 54321, 88888, 99999]
+SEEDS = [42, 420, 1337, 2024, 7777, 9999, 12345, 54321, 88888, 99999, 121212]
 ARCHIVES = [20]
 
-# Build combination list
 for MAP in MAP_TYPES:
     for ENV in ENV_DIMS:
         for BUDGET in TOTAL_BUDGETS:
@@ -39,25 +61,28 @@ for MAP in MAP_TYPES:
                                             "seed": SEED,
                                             "archive": ARCHIVE,
                                             "start_x": 0,
-                                            "start_y": ENV//2,
-                                            "goal_x": ENV-1,
-                                            "goal_y": ENV//2,
+                                            "start_y": ENV // 2,
+                                            "goal_x": ENV - 1,
+                                            "goal_y": ENV // 2,
                                         })
 
-print(f"Loaded {len(PARAMS)} parameter combinations.")
+total_jobs = len(PARAMS)
 
-def estimate_memory_per_worker_mb():
-    return 8000
+if rank == root:
+    print(f"[MPI] Total parameter combinations: {total_jobs}")
 
-def compute_safe_worker_count(max_processes, total_memory_mb):
-    mem_per_worker = estimate_memory_per_worker_mb()
-    max_by_mem = total_memory_mb // mem_per_worker
-    return max(1, min(max_processes, max_by_mem))
+comm.Barrier()
 
 
-def run_case(params):
+# -------------------------------------------------
+# Worker loop: each rank processes jobs in stride
+# -------------------------------------------------
+for idx in range(rank, total_jobs, size):
+    params = PARAMS[idx]
+
+    # Construct log file name
     log_name = (
-        f"mp_logs/mcts_"
+        f"mpi_logs/mcts_"
         f"{params['map']}_"
         f"{params['env_dim']}_"
         f"{params['budget']}_"
@@ -68,7 +93,6 @@ def run_case(params):
         f"{params['rollout']}_"
         f"{params['seed']}.log"
     )
-
 
     cmd = [
         "python3", "main_cluster.py",
@@ -88,22 +112,14 @@ def run_case(params):
         "--seed", str(params["seed"]),
     ]
 
+    # Execute the job
     with open(log_name, "w") as f:
         print("RUN:", " ".join(cmd), file=f)
         subprocess.run(cmd, stdout=f, stderr=f)
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--processes", type=int)
-    parser.add_argument("--total_memory")
-    args = parser.parse_args()
+    print(f"[Rank {rank}] completed job {idx}/{total_jobs}")
 
-    total_memory_mb = 256 * 1024
-    processes = 24
+comm.Barrier()
 
-    print(f"Using {24} workers (memory-safe).")
-
-    os.makedirs("mp_logs", exist_ok=True)
-
-    with mp.Pool(24) as pool:
-        pool.map(run_case, PARAMS)
+if rank == root:
+    print("[MPI] All jobs finished.")

@@ -1,14 +1,13 @@
 #!/bin/bash
-#SBATCH --job-name=mcts_mp
+#SBATCH --job-name=mcts100
 #SBATCH --partition=members
-#SBATCH --cpus-per-task=24
-#SBATCH --mem=256G
-#SBATCH --output=logs/mp.out
-#SBATCH --error=logs/mp.err
+#SBATCH --ntasks=100
+#SBATCH --cpus-per-task=1
+#SBATCH --mem-per-cpu=4G
+#SBATCH --output=logs/mpi128.out
+#SBATCH --error=logs/mpi128.err
 
 cd $SLURM_SUBMIT_DIR
 source ../venv/bin/activate
 
-python3 -u run_mp.py \
-    --processes $SLURM_CPUS_PER_TASK \
-    --total_memory "$SLURM_MEM_PER_NODE"
+srun python3 run_mpi.py

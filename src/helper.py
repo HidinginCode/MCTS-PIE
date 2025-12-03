@@ -7,67 +7,116 @@ class Helper():
     """Helper class with helper methods."""
 
     @staticmethod
-    def determine_pareto_front_from_nodes(node_list: list[Node], ucb_flag: bool = False) -> list[Node]:
-        """Determines pareto front based on values dict of nodes.
+    def stable_normalize(values: list[dict[str, float]], eps: float = 1e-9) -> list[dict[str, float]]:
+        """
+        Robust multi-objective normalization for MCTS.
+        Uses z-score normalization with safe handling of near-constant dimensions.
 
         Args:
-            node_list (list[Node]): List of nodes
-            ucb_flag (bool): Flag that can be switched to used ucb values instead of normal ones for domination
+            values: list of dicts, one per node, with keys:
+                    "step_count", "weight_shifted", "distance_to_goal"
+            eps: numerical stabilization constant
 
         Returns:
-            list[Node]: Pareto front
+            normalized_list: list of dicts with same keys, but normalized values
         """
 
-        def is_dominated(node1: Node, node2: Node, ucb_flag: bool) -> bool:
-            """Determines if node 1 is dominated by node 2
+        # --- Extract values into matrix ---
+        keys = list(values[0].keys())
+        mat = np.array([[v[k] for k in keys] for v in values], dtype=float)
 
-            Args:
-                node1 (Node): Node to be checked if its dominated
-                node2 (Node): Node to be check if it dominates
-                ucb_flag (bool): Switch for ucb or normal value domination
+        # --- Compute means and stds ---
+        means = mat.mean(axis=0)
+        stds = mat.std(axis=0)
 
-            Returns:
-                bool: Domination status
-            """
+        # --- Avoid division by zero ---
+        stds = np.where(stds < eps, 1.0, stds)
 
-            if not ucb_flag:
-                return (
-                    (node2._values["step_count"] <= node1._values["step_count"]) and
-                    (node2._values["weight_shifted"] <= node1._values["weight_shifted"]) and
-                    (node2._values["distance_to_goal"] <= node1._values["distance_to_goal"]) and
-                    ((node2._values["step_count"] < node1._values["step_count"]) or
-                    (node2._values["weight_shifted"] < node1._values["weight_shifted"]) or
-                    (node2._values["distance_to_goal"] < node1._values["distance_to_goal"])
-                    )
-                )
-            
-            return (
-                (node2._ucb_values["step_count"] <= node1._ucb_values["step_count"]) and
-                (node2._ucb_values["weight_shifted"] <= node1._ucb_values["weight_shifted"]) and
-                (node2._ucb_values["distance_to_goal"] <= node1._ucb_values["distance_to_goal"]) and
-                ((node2._ucb_values["step_count"] < node1._ucb_values["step_count"]) or
-                (node2._ucb_values["weight_shifted"] < node1._ucb_values["weight_shifted"]) or
-                (node2._ucb_values["distance_to_goal"] < node1._ucb_values["distance_to_goal"])
-                )
-            )
+        # --- Z-score normalization ---
+        normalized = (mat - means) / stds
 
-        non_dominated_nodes = []
+        # Convert back to list-of-dicts
+        normalized_list = [
+            {k: float(normalized[i, j]) for j, k in enumerate(keys)}
+            for i in range(len(values))
+        ]
 
-        for node1 in node_list:
-            # Set domination flag false
-            dominated = False
+        return normalized_list
+    
+    @staticmethod
+    def stable_minmax(matrix: np.ndarray, eps: float = 1e-9) -> np.ndarray:
+        """
+        Safe [0,1] min-max normalization.
+        Used in epsilon-clustering and crowding distance.
+        """
+        mins = matrix.min(axis=0)
+        maxs = matrix.max(axis=0)
+        ranges = maxs - mins
+        ranges = np.where(ranges < eps, 1.0, ranges)
 
-            for node2 in node_list:
-                if node1 is node2:
-                    continue
-
-                if is_dominated(node1, node2, ucb_flag):
-                    dominated = True
-                    break
-            if not dominated:
-                non_dominated_nodes.append(node1)
+        return (matrix - mins) / ranges
         
-        return non_dominated_nodes
+    @staticmethod
+    def determine_pareto_front_from_nodes(nodes, use_ucb_values=False):
+        """
+        FAST Pareto-front computation using Kung's O(n log n) skyline algorithm.
+        Minimization for 3 objectives.
+        """
+
+        if not nodes:
+            return []
+
+        # Extract 3-tuple objective values for each node
+        # MUCH faster than dict lookups inside dominance checks
+        if use_ucb_values:
+            vals = [(n, 
+                    (n._ucb_values["step_count"],
+                    n._ucb_values["weight_shifted"],
+                    n._ucb_values["distance_to_goal"]))
+                    for n in nodes]
+        else:
+            vals = [(n, 
+                    (n._values["step_count"],
+                    n._values["weight_shifted"],
+                    n._values["distance_to_goal"]))
+                    for n in nodes]
+
+        # Sort lexicographically by objective 1, then 2, then 3
+        vals.sort(key=lambda x: x[1])
+
+        # Divide & conquer skyline computation
+        def skyline(items):
+            n = len(items)
+            if n <= 1:
+                return items
+
+            left = skyline(items[: n//2])
+            right = skyline(items[n//2 :])
+
+            # Filter right items by checking dominance against left skyline
+            filtered_right = []
+            for node, (a1, a2, a3) in right:
+                dominated = False
+                for ln, (b1, b2, b3) in left:
+
+                    # Branchless, inlined 3D dominance check
+                    if (b1 <= a1 and b2 <= a2 and b3 <= a3) and \
+                    (b1 < a1 or b2 < a2 or b3 < a3):
+                        dominated = True
+                        break
+
+                if not dominated:
+                    filtered_right.append((node, (a1, a2, a3)))
+
+            # Merge left and filtered right
+            return left + filtered_right
+
+        # Run skyline on sorted items
+        pf = skyline(vals)
+
+        # Return nodes only
+        return [n for n, _ in pf]
+
     
     @staticmethod
     def hypervolume(points: list) -> tuple:
@@ -80,15 +129,16 @@ class Helper():
             tuple: Hypervolumes and full HV as tuple
         """
         values = [list(point.values()) for point in points]
+        values_norm = Helper.stable_minmax(np.array(values))
         #print(values)
 
         # Compute reference point
-        worst = np.max(values, axis=0)
-        ranges = np.max(values, axis=0) - np.min(values, axis=0)
+        worst = np.max(values_norm, axis=0)
+        ranges = np.max(values_norm, axis=0) - np.min(values_norm, axis=0)
         ref = worst + 0.1 * (ranges + 1e-12) # Add margin to worst point
 
         hv = HV.Hypervolume(ref_point=np.array(ref))
-        return ([hv.do((np.array(val))) for val in values], hv.do(np.array(values)))
+        return ([hv.do((np.array(val))) for val in values_norm], hv.do(np.array(values_norm)))
 
     @staticmethod
     def normalize_archive(archive: list[dict]) -> list[dict]:
@@ -106,62 +156,27 @@ class Helper():
         keys = list(archive[0].keys())
         values = np.array([[d[k] for k in keys] for d in archive], dtype=float)
 
-        # Compute global min/max per objective
-        mins = values.min(axis=0)
-        maxs = values.max(axis=0)
-        ranges = np.where(maxs - mins == 0, 1.0, maxs - mins)  # avoid div by 0
-
-        # Normalize to [0, 1]
-        normalized_values = (values - mins) / ranges
+        # Use the robust min-max helper (handles tiny ranges safely)
+        normalized_values = Helper.stable_minmax(values)
 
         # Rebuild list of dicts
         normalized_archive = [
-            {k: float(v) for k, v in zip(keys, norm)}
-            for norm in normalized_values
+            {k: float(v) for k, v in zip(keys, norm_row)}
+            for norm_row in normalized_values
         ]
         return normalized_archive
 
-    @staticmethod
-    def epsilon_clustering(node: Node, max_archive_size: int, eps: float = 1e-4, eps_steps=0.001):
-
-        current = list(node._pareto_paths)
-
-        while len(current) > max_archive_size:
-            value_dicts = [path[-1][1] for path in current]
-            normalized_dicts = Helper.normalize_archive(value_dicts)
-
-            archive = {}
-            for path, norm_dict in zip(current, normalized_dicts):
-                values = np.array(list(norm_dict.values()), dtype=float)
-                cell = tuple(np.floor(values / eps).astype(int))
-
-                if cell not in archive:
-                    archive[cell] = path
-                else:
-                    # use RAW values for representative choice
-                    old_values = np.array(list(archive[cell][-1][1].values()), dtype=float)
-                    new_values = np.array(list(path[-1][1].values()), dtype=float)
-                    if new_values.sum() < old_values.sum():
-                        archive[cell] = path
-
-            current = list(archive.values())
-            eps += eps_steps
-
-        node._pareto_paths = current
-
-    def epsilon_clustering_for_nodes(node: Node, eps: float = 1e-4, eps_steps = 0.001):
+    def epsilon_clustering_for_nodes(node: Node, eps: float = 1e-4, eps_steps=0.001):
         """Returns the child from the given node that survives the epsilon clustering.
 
         Args:
             node (Node): Node from which child is selected.
             eps (float, optional): Epsilon start value. Defaults to 1e-4.
-            eps_max (float, optional): Maximum epsilon value. Defaults to 1.
             eps_steps (float, optional): Steps in which to increase epsilon. Defaults to 0.001.
 
         Returns:
             Node: Child that survived clustering
         """
-        # Clone node for independent everything
         children = list(node._children.values())
 
         if not children:
@@ -174,24 +189,24 @@ class Helper():
             raw_value_dicts = [child._values for child in children]
             normalized_dicts = Helper.normalize_archive(raw_value_dicts)
 
-            archive: dict[tuple[int, ...], Node] = {}
+            # cell -> (score, child)
+            archive: dict[tuple[int, ...], tuple[float, Node]] = {}
 
             for child, norm_dict in zip(children, normalized_dicts):
                 norm_vals = np.array(list(norm_dict.values()), dtype=float)
+
+                # epsilon grid cell in normalized space
                 cell = tuple(np.floor(norm_vals / eps).astype(int))
 
-                if cell not in archive:
-                    archive[cell] = child
-                else:
-                    # choose representative by RAW objectives (minimization)
-                    old_raw = np.array(list(archive[cell]._values.values()), dtype=float)
-                    new_raw = np.array(list(child._values.values()), dtype=float)
+                # representative score: L2 norm of normalized objectives (minimization)
+                score = float(np.linalg.norm(norm_vals))
 
-                    if new_raw.sum() < old_raw.sum():
-                        archive[cell] = child
+                if cell not in archive or score < archive[cell][0]:
+                    archive[cell] = (score, child)
 
-            children = list(archive.values())
-            eps += eps_steps   # coarsen grid gradually until only one survives
+            # keep only the representative child from each occupied cell
+            children = [entry[1] for entry in archive.values()]
+            eps += eps_steps   # coarsen grid gradually
 
         return children[0]
 
@@ -205,7 +220,8 @@ class Helper():
         Returns:
             list: List of crowding distances.
         """
-        front = np.array([[value for value in point.values()] for point in points])
+        front = np.array([[value for value in point.values()] for point in points], float)
+        front = Helper.stable_minmax(front)
         N, M = front.shape
         distances = np.zeros(N)
 
@@ -237,4 +253,55 @@ class Helper():
         distances[inf_mask] = np.inf
         return distances.tolist()
 
+    @staticmethod
+    def epsilon_clustering(node: Node, max_archive_size: int, eps: float = 1e-4, eps_steps: float = 0.001):
+        """
+        Epsilon-clustering for pareto path archives.
 
+        - Uses stable min-max normalization internally (via normalize_archive)
+        - Uses L2-norm of normalized objective vectors to choose cell representatives
+        - Preserves all existing control flow and archive structure
+        """
+
+        current = list(node._pareto_paths)
+
+        # Nothing to compress
+        if len(current) <= max_archive_size:
+            return
+
+        while len(current) > max_archive_size:
+
+            # Extract raw values from final entry of each path
+            # (value dict is always at path[-1][1])
+            raw_values = [path[-1][1] for path in current]
+
+            # Normalize using your stabilized min-max
+            normalized_dicts = Helper.normalize_archive(raw_values)
+
+            # Cell → (score, path)
+            archive = {}
+
+            for path, norm_dict in zip(current, normalized_dicts):
+                vec = np.array(list(norm_dict.values()), dtype=float)
+
+                # Epsilon grid cell in normalized space
+                cell = tuple(np.floor(vec / eps).astype(int))
+
+                # Balanced representative selection:
+                # Use L2 norm of normalized objective vector
+                score = float(np.linalg.norm(vec))
+
+                # Keep the one with lowest score (minimization)
+                if cell not in archive or score < archive[cell][0]:
+                    archive[cell] = (score, path)
+
+            # Keep only the representative paths
+            current = [entry[1] for entry in archive.values()]
+
+            eps += eps_steps
+
+            # Early exit if compressed enough
+            if len(current) <= max_archive_size:
+                break
+
+        node._pareto_paths = current
