@@ -1,14 +1,10 @@
 """This module contains the logger class, responsible for collecting data."""
 
 import os
-import shutil
-from node import Node
-#from analyzer import Analyzer
-import pandas as pd
 import pickle
-from time import time
+from node import Node
 
-class Logger():
+class Logger:
     """Logger class which logs information for each run and prepares directories"""
 
     def __init__(self, 
@@ -26,8 +22,11 @@ class Logger():
                  seed: int,
                  base_root: Node,
                  base_log_path: str = "./log"):
-        self._base_log_path = base_log_path
+
         self._map_name = map_name
+        self._env_dim = env_dim
+        self._start = start
+        self._goal = goal
         self._total_budget = total_budget
         self._per_sim_budget = per_sim_budget
         self._number_of_simulations = number_of_simulations
@@ -35,64 +34,82 @@ class Logger():
         self._root_selection_method = root_selection_method
         self._max_pareto_paths = max_pareto_paths
         self._simulation_method = simulation_method
-        self._env_dim = env_dim
-        self._start = start
-        self._goal = goal
         self._seed = seed
         self._root = base_root
 
-        if not os.path.exists(base_log_path):
-            os.mkdir(base_log_path)
-        
-        dir_name = f"{self._map_name}-{self._env_dim}-{self._start}-{self._goal}-{self._tree_selection_method}-{self._root_selection_method}-{self._simulation_method}-{self._total_budget}-{self._per_sim_budget}-{self._number_of_simulations}-{self._max_pareto_paths}-{self._seed}"
-        log_path = os.path.join(base_log_path, dir_name)
-        if os.path.exists(log_path):
-            shutil.rmtree(log_path)
+        # -----------------------------
+        #  SAFE DIRECTORY CREATION
+        # -----------------------------
+        os.makedirs(base_log_path, exist_ok=True)
 
-        os.mkdir(log_path)
+        # Directory WITHOUT seed
+        dir_name = (
+            f"{map_name}-{env_dim}-{start}-{goal}-"
+            f"{tree_selection_method}-{root_selection_method}-"
+            f"{simulation_method}-{total_budget}-{per_sim_budget}-"
+            f"{number_of_simulations}-{max_pareto_paths}"
+        )
 
-        self._log_path = log_path
-        self.create_header_file()
+        self._log_path = os.path.join(base_log_path, dir_name)
 
+        # race-safe directory creation for multiple processes
+        os.makedirs(self._log_path, exist_ok=True)
+
+        # Header is written ONCE — guard with exist check
+        header_path = os.path.join(self._log_path, "header.pickle")
+        if not os.path.exists(header_path):
+            self.create_header_file(header_path)
+
+    # ----------------------------------------------------------
+    #   LOG SOLUTIONS → writes ONLY <seed>.pickle
+    #   SAFE FOR MULTIPROCESS EXECUTION
+    # ----------------------------------------------------------
     def log_solutions(self, solutions: list[Node]) -> None:
-        """Log the solutions of a run in log directory.
 
-        Args:
-            solutions (list): Solutions of the run.
-        """
-        for i, solution in enumerate(solutions):
-            solution: Node
+        collected = []
+
+        for solution in solutions:
             current = solution
             path = []
-            shifts = []
             moves = []
+            shifts = []
 
-            # Path reconstruction
-
+            # Reconstruct path
             while current is not None:
                 path.append(current._controller._current_pos)
-                if current._last_move is not None:#
-                    moves.append(current._last_move)
-                    shifts.append(current._last_move[1])
+
+                if current._last_move is not None:
+                    move, shift = current._last_move
+                    moves.append(move)
+                    shifts.append(shift)
+
                 current = current._parent
-            
+
+            # Reverse once
+            path.reverse()
             moves.reverse()
             shifts.reverse()
-            path.reverse()
 
             solution.refresh_values()
-            data = solution._values.copy()
-            data["path"] = path
-            data["moves"] = moves
 
-            with open(f"{self._log_path}/{i}-values.pickle", "wb") as f:
-                pickle.dump(data,f)
+            data = {
+                "values": solution._values.copy(),
+                "path": path,
+                "moves": moves,
+                "shifts": shifts,
+            }
 
-            #Analyzer.visualize_path_with_shifts(solution._controller._environment._environment, path, shifts, (0,0), solution._controller._environment._goal, f"{self._log_path}/path-{i}.png")
-            #Analyzer.save_path_as_gif(self._root._controller._environment, self._root._controller._start_pos, moves, f"{self._log_path}/path-{i}.gif")
+            collected.append(data)
 
-    def create_header_file(self) -> None:
-        """Creates a header file in the log directory containing all hyperparameters."""
+        # Write only to <seed>.pickle → no race conditions
+        out_path = os.path.join(self._log_path, f"{self._seed}.pickle")
+        with open(out_path, "wb") as f:
+            pickle.dump(collected, f)
+
+    # ----------------------------------------------------------
+    # HEADER FILE WRITTEN ONCE
+    # ----------------------------------------------------------
+    def create_header_file(self, header_path: str) -> None:
         header_dict = {
             "map_name": self._map_name,
             "env_dim": self._env_dim,
@@ -105,7 +122,8 @@ class Logger():
             "root_selection_method": self._root_selection_method,
             "max_pareto_paths": self._max_pareto_paths,
             "simulation_method": self._simulation_method,
-            "seed": self._seed
         }
-        with open(f"{self._log_path}/header.pickle", "wb") as f:
+
+        # Safe write of header
+        with open(header_path, "wb") as f:
             pickle.dump(header_dict, f)

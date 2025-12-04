@@ -255,7 +255,7 @@ class MctsTree():
         return used_move_counter
 
 
-    def iterative_heavy_angular_rollout(self, leaf: Node,
+    def iterative_heavy_square_sampling_rollout(self, leaf: Node,
                                         simulations: int,
                                         maximum_moves: int,
                                         remaining_budget: int) -> int:
@@ -346,29 +346,9 @@ class MctsTree():
                 # No improving direction -> local minimum w.r.t. this target -> stop
                 if not improving_dirs:
                     break
-
-                # Second filter: among equally distance-improving directions,
-                # choose those that minimize cell weight at the destination.
-                best_weight_dirs: list[tuple[int, int]] = []
-                min_weight = None
-
-                for dx_move, dy_move in improving_dirs:
-                    next_x = current_x + dx_move
-                    next_y = current_y + dy_move
-                    cell_weight = env_grid[next_x][next_y]
-
-                    if min_weight is None or cell_weight < min_weight - 1e-12:
-                        min_weight = cell_weight
-                        best_weight_dirs = [(dx_move, dy_move)]
-                    elif abs(cell_weight - min_weight) <= 1e-12:
-                        best_weight_dirs.append((dx_move, dy_move))
-
-                # Break safety: should not happen, but guard anyway
-                if not best_weight_dirs:
-                    break
-
+                
                 # Random tie-break among equally good (distance, weight) directions
-                dx_chosen, dy_chosen = random.choice(best_weight_dirs)
+                dx_chosen, dy_chosen = random.choice(improving_dirs)
 
                 chosen_deltas.append((dx_chosen, dy_chosen))
                 current_x += dx_chosen
@@ -619,7 +599,7 @@ class MctsTree():
         
         match rollout_func:
             case 0: rollout_function = self.light_rollout
-            case 1: rollout_function = self.iterative_heavy_angular_rollout
+            case 1: rollout_function = self.iterative_heavy_square_sampling_rollout
             case 2: rollout_function = self.iterative_heavy_distance_weight_rollout
             case _: raise ValueError("Did not supply a suitable rollout function indicator")
 
