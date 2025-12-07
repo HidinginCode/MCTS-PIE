@@ -88,5 +88,5 @@ def simulations(map: str,
     tree.search(total_budget=budget, per_sim_budget=per_sim_budget, simulations_per_child=number_of_sims, rollout_func = rollout_method, root_selection = root_selection_method, tree_selection = tree_selection_method)
 
 if __name__ == "__main__":
-    simulations(map = "random_map", env_dim = 20, start = (0,10), goal=(19,10), budget=1000000, per_sim_budget=50, number_of_sims=500, rollout_method=1, root_selection_method=0, tree_selection_method=0)
+    simulations(map = "random_map", env_dim = 20, start = (0,10), goal=(19,10), budget=1000000, per_sim_budget=50, number_of_sims=500, rollout_method=0, root_selection_method=0, tree_selection_method=2)
     #Analyzer.visualize_maps()

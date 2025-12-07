@@ -117,8 +117,8 @@ class MctsTree():
 
         else:
             # We *do* have extremes: give them 50% of the mass, the rest to finite ones
-            extreme_mass = 0.5
-            finite_mass = 0.5
+            extreme_mass = 0.2
+            finite_mass = 0.8
 
             # If there are no finite positive CDs, just pick among extremes
             finite_sum = sum(finite_values)

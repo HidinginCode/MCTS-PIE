@@ -11,7 +11,7 @@ def main():
     
     param_grid = generate_param_combinations()
     
-    processes = 25
+    processes = 40
     print(f"Opening pool with {min(processes, os.cpu_count())} workers...")
     with mp.Pool(min(processes, os.cpu_count())) as p:
         results = p.map(sim_wrapper, list(param_grid))
