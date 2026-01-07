@@ -1,6 +1,7 @@
 from main import simulations
 import os
 import multiprocessing as mp
+from copy import deepcopy
 
 def sim_wrapper(arg_list: tuple):
     print(f"Worker {os.getpid()} started working on {arg_list})")
@@ -10,8 +11,7 @@ def sim_wrapper(arg_list: tuple):
 def main():
     
     param_grid = generate_param_combinations()
-    
-    processes = 40
+    processes = 27
     print(f"Opening pool with {min(processes, os.cpu_count())} workers...")
     with mp.Pool(min(processes, os.cpu_count())) as p:
         results = p.map(sim_wrapper, list(param_grid))
@@ -19,15 +19,15 @@ def main():
     
 def generate_param_combinations():
     MAP_TYPES = ["random_map"]
-    ENV_DIMS = [20, 35, 50]
-    TOTAL_BUDGETS = [1000000, 3000000, 5000000, 7000000, 9000000, 11000000]
-    PER_SIM_BUDGETS = [30, 50, 70, 90, 110, 130]
-    NUM_SIMS_LIST = [100, 300, 500, 700, 900, 1100]
+    ENV_DIMS = [35]
+    TOTAL_BUDGETS = [400000, 500000, 600000]
+    PER_SIM_BUDGETS = [50, 100, 150]
+    NUM_SIMS_LIST = [100, 200, 300]
     ROLLOUT_METHODS = [0]#, 1, 2]
     ROOT_METHODS = [0]
-    TREE_METHODS = [0, 1, 2]
+    TREE_METHODS = [0]
     ARCHIVES = [20]
-    SEEDS = [42, 420, 1337, 2024, 7777, 9999, 12345, 54321, 88888, 99999, 121212]
+    SEEDS = [42]
 
     print("Generating parameter grid ...")
     
