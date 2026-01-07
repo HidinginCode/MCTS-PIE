@@ -209,5 +209,6 @@ __marimo__/
 ./log/
 log/
 log_prelim/
+log.tar.gz
 
 maps/

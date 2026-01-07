@@ -20,9 +20,9 @@ def main():
 def generate_param_combinations():
     MAP_TYPES = ["random_map"]
     ENV_DIMS = [35]
-    TOTAL_BUDGETS = [400000, 500000, 600000]
-    PER_SIM_BUDGETS = [50, 100, 150]
-    NUM_SIMS_LIST = [100, 200, 300]
+    TOTAL_BUDGETS = [100000, 200000, 300000, 400000, 500000, 600000]
+    PER_SIM_BUDGETS = [100, 150, 200, 250, 300]
+    NUM_SIMS_LIST = [100, 200, 300, 400]
     ROLLOUT_METHODS = [0]#, 1, 2]
     ROOT_METHODS = [0]
     TREE_METHODS = [0]
