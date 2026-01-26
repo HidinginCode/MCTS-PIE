@@ -609,10 +609,9 @@ class MctsTree():
             # Set root to initial root
         current_root = self._root
         solutions = []
-        while not current_root.is_terminal_state():
+        while not current_root.is_terminal_state() or current_root._depth >=1500:
             used_simulation_counter = 0
             while used_simulation_counter < total_budget:
-
                 # Use tree policy
                 # Reminder: Tree policy returns none if selected node has reached goal or we are in unsolvable state
                 current_node = self.tree_policy(root = current_root, tree_sel_func=tree_sel_function)
@@ -634,9 +633,8 @@ class MctsTree():
 
             # Current root umsetzen
             current_root = root_sel_function(current_root)
-            #current_root = random.choice(Helper.determine_pareto_front_from_nodes(current_root._children.values()))
-            #current_root = self.pareto_path_child_selection_hv(current_root)
-            #print(f"Root was set to {current_root._controller._current_pos}")
+            Node.prune_siblings(current_root) # Remove siblings to prune tree
+
             if current_root.is_terminal_state():
                 solutions.append(current_root)
         log.log_solutions(solutions)

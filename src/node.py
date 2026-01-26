@@ -194,3 +194,23 @@ class Node():
             return child_node
         else:
             return None
+
+    @staticmethod
+    def prune_siblings(current_root: Node) -> None:
+        """Remove children that are not the current root from the dictionary of the parent.
+        Prunes the tree to free up memory.
+
+        Args:
+            current_root (Node): _description_
+        """
+        parent = current_root._parent
+        if parent is None:
+            return
+
+        parent._children = {
+            key: child
+            for key, child in parent._children.items()
+            if child is current_root
+        }
+        parent._pareto_paths = []
+        parent._old_epsilon_candidate = None

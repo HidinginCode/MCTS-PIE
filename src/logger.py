@@ -49,19 +49,15 @@ class Logger:
         #     f"{simulation_method}-{total_budget}-{per_sim_budget}-"
         #     f"{number_of_simulations}-{max_pareto_paths}"
         # )
-        dir_name = f"{self._map_name}-{env_dim}"
+        dir_name = f"{self._map_name}-{self._env_dim}-{self._simulation_method}"
 
         self._log_path = os.path.join(base_log_path, dir_name)
 
         # race-safe directory creation for multiple processes
         os.makedirs(self._log_path, exist_ok=True)
 
-    # ----------------------------------------------------------
-    #   LOG SOLUTIONS → writes ONLY <seed>.pickle
-    #   SAFE FOR MULTIPROCESS EXECUTION
-    # ----------------------------------------------------------
     def log_solutions(self, solutions: list[Node]) -> None:
-
+        
         collected = []
 
         for solution in solutions:
@@ -107,6 +103,9 @@ class Logger:
             }
 
             collected.append(data)
+
+        if len(solutions) == 0:
+            collected = None
 
         # Write only to <seed>.pickle → no race conditions
         out_path = os.path.join(self._log_path, f"{self._total_budget}-{self._per_sim_budget}-{self._number_of_simulations}-{self._tree_selection_method}-{self._root_selection_method}-{self._simulation_method}-{self._seed}.pickle")

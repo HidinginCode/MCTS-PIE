@@ -1,12 +1,12 @@
 #!/bin/bash
-#SBATCH --job-name=damn
+#SBATCH --job-name=masters-thesis
 #SBATCH --output=logs/job.out
 #SBATCH --error=logs/job.err
-#SBATCH --cpus-per-task=27
-#SBATCH --mem=100G
+#SBATCH --cpus-per-task=120
+#SBATCH --mem=120G
 #SBATCH --ntasks=1
 #SBATCH --partition=members
-#SBATCH --nodelist=ant16
+#SBATCH --nodelist=ant6
 
 
 echo "Starting mcts job with 27 workers ..."
