@@ -138,7 +138,7 @@ class Helper():
         ref = worst + 0.1 * (ranges + 1e-12) # Add margin to worst point
 
         hv = HV.Hypervolume(ref_point=np.array(ref))
-        return ([hv.do((np.array(val))) for val in values_norm], hv.do(np.array(values_norm)))
+        return ([hv.do((np.array(val))) for val in values_norm])
 
     @staticmethod
     def normalize_archive(archive: list[dict]) -> list[dict]:
@@ -299,9 +299,5 @@ class Helper():
             current = [entry[1] for entry in archive.values()]
 
             eps += eps_steps
-
-            # Early exit if compressed enough
-            if len(current) <= max_archive_size:
-                break
 
         node._pareto_paths = current

@@ -51,6 +51,7 @@ class Node():
         new_node._paths_changed = bool(self._paths_changed)
         new_node._old_epsilon_candidate = self._old_epsilon_candidate
         new_node._old_cd_values = self._old_cd_values
+        new_node._old_hv_values = self._old_hv_values
 
         # Copy
         new_node._values = self._values.copy()

@@ -158,15 +158,15 @@ class MctsTree():
         
         if node._paths_changed:
             values = [path[0][1] for path in node._pareto_paths]
-            hypervolumes, full_hv = Helper.hypervolume(values)
+            hypervolumes= Helper.hypervolume(values)
             # Since paths changed we save new hypervolumes
-            node._old_hv_values = (hypervolumes, full_hv)
+            node._old_hv_values = hypervolumes
             #print(f"Node old hv values: {node._old_hv_values}")
             node._paths_changed = False
         else:
-            hypervolumes, full_hv = node._old_hv_values
+            hypervolumes = node._old_hv_values
 
-        weights = [hv/full_hv for hv in hypervolumes]
+        weights = [hv/sum(hypervolumes) for hv in hypervolumes]
         child_key_index = random.choices(range(len(hypervolumes)), weights, k=1)[0]
         child_key = node._pareto_paths[child_key_index][-1][0]
 
@@ -540,10 +540,6 @@ class MctsTree():
             node._paths_changed = True
             node._pareto_paths.append(copy.deepcopy(path))
             
-            # Then prune for if too many paths using epsilon domination
-            #if len(node._pareto_paths) > self._max_solutions and node._depth != 0: # We dont prune at root since we want accurate pareto front there
-            #    #print(f"Node at depth {node._depth} hat too many solutions, pruning ...")
-            #    Helper.epsilon_clustering(node, max_archive_size=self._max_solutions)
 
     def backpropagate(self, node: Node, current_root: Node) -> None:
         """Backpropagate leaf metrics up the tree."""
@@ -609,7 +605,7 @@ class MctsTree():
             # Set root to initial root
         current_root = self._root
         solutions = []
-        while not current_root.is_terminal_state() or current_root._depth >=1500:
+        while not current_root.is_terminal_state() or current_root._depth >=400:
             used_simulation_counter = 0
             while used_simulation_counter < total_budget:
                 # Use tree policy
