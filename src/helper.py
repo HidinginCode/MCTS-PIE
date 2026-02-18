@@ -138,7 +138,53 @@ class Helper():
         ref = worst + 0.1 * (ranges + 1e-12) # Add margin to worst point
 
         hv = HV.Hypervolume(ref_point=np.array(ref))
-        return ([hv.do((np.array(val))) for val in values_norm])
+        return ([hv.do((np.array([val]))) for val in values_norm])
+
+    @staticmethod
+    def hypervolume_contributions(points: list[dict[str, float]]) -> list[float]:
+        """
+        Compute HV contribution for each point in a non-dominated set.
+
+        - points: list of objective dicts (minimization)
+        - returns: list of contributions aligned with input order
+        """
+        values = [list(p.values()) for p in points]
+        S = Helper.stable_minmax(np.array(values, dtype=float))  # shape (n, m)
+
+        if len(S) == 0:
+            return []
+        if len(S) == 1:
+            # Contribution of the only point is the HV of the set
+            worst = np.max(S, axis=0)
+            ranges = np.max(S, axis=0) - np.min(S, axis=0)
+            ref = worst + 0.1 * (ranges + 1e-12)
+            hv = HV.Hypervolume(ref_point=np.array(ref))
+            return [float(hv.do(S))]
+
+        # Reference point (same idea as your single-point code)
+        worst = np.max(S, axis=0)
+        ranges = np.max(S, axis=0) - np.min(S, axis=0)
+        ref = worst + 0.1 * (ranges + 1e-12)
+
+        hv = HV.Hypervolume(ref_point=np.array(ref))
+
+        # HV of full set
+        hv_all = float(hv.do(S))
+
+        contrib = []
+        for i in range(len(S)):
+            S_wo = np.delete(S, i, axis=0)
+            hv_wo = float(hv.do(S_wo))
+            c = hv_all - hv_wo
+            # Guard against tiny negative due to numerical issues
+            contrib.append(max(0.0, c))
+
+        # Optional: avoid all-zero weights by adding epsilon
+        if sum(contrib) == 0.0:
+            contrib = [1.0 for _ in contrib]
+
+        return contrib
+
 
     @staticmethod
     def normalize_archive(archive: list[dict]) -> list[dict]:

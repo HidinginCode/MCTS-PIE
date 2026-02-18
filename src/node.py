@@ -36,6 +36,11 @@ class Node():
         self._old_epsilon_candidate = None # Here the last candidate for epsilon domination is stored
         self._old_cd_values = [] # Here old CD values are stored so that recomputation is not necessary
         self._last_move = last_move
+        self._real_values = {
+            "step_count": self._controller._step_count,
+            "weight_shifted": self._controller._weight_shifted,
+            "distance_to_goal": self._controller._distance_to_goal
+        }
 
     def clone(self) -> Node:
         """Clone method for node object.
@@ -144,6 +149,9 @@ class Node():
         self._values = {"step_count": self._controller._step_count,
                         "weight_shifted": self._controller._weight_shifted,
                         "distance_to_goal": self._controller._distance_to_goal}
+        self._real_values = {"step_count": self._controller._step_count,
+                            "weight_shifted": self._controller._weight_shifted,
+                            "distance_to_goal": self._controller._distance_to_goal}
 
     def get_untried_actions(self) -> list[tuple]:
         """Returns all actions that were not yet tried on that node.

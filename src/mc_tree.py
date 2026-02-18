@@ -157,19 +157,16 @@ class MctsTree():
             return random.choice(node._children.values())
         
         if node._paths_changed:
-            values = [path[0][1] for path in node._pareto_paths]
-            hypervolumes= Helper.hypervolume(values)
+            values = [path[-1][1] for path in node._pareto_paths]
+            contrib = Helper.hypervolume_contributions(values)
             # Since paths changed we save new hypervolumes
-            node._old_hv_values = hypervolumes
-            #print(f"Node old hv values: {node._old_hv_values}")
+            node._old_hv_values = contrib
             node._paths_changed = False
         else:
-            hypervolumes = node._old_hv_values
+            contrib = node._old_hv_values
 
-        weights = [hv/sum(hypervolumes) for hv in hypervolumes]
-        child_key_index = random.choices(range(len(hypervolumes)), weights, k=1)[0]
+        child_key_index = random.choices(range(len(contrib)), weights=contrib, k=1)[0]
         child_key = node._pareto_paths[child_key_index][-1][0]
-
         return node._children[child_key]
 
     def ucb_child_selection(self, node: Node) -> Node:
@@ -543,34 +540,40 @@ class MctsTree():
 
     def backpropagate(self, node: Node, current_root: Node) -> None:
         """Backpropagate leaf metrics up the tree."""
-        leaf_values = node._values.copy()
+
+        # Use stable, unmodified totals (not the running mean)
+        leaf_values = node._real_values.copy()
+
         path = []
         current = node
         current_root_parent = current_root._parent
+
         while current is not None and current is not current_root_parent:
             current._visits += 1
 
-            # Incremental average update
+            # Keep your averaging exactly as-is, but average leaf_values (stable)
             for key, val in leaf_values.items():
                 current._values[key] = (
                     (current._values[key] * (current._visits - 1)) + val
                 ) / current._visits
+
             move = current._last_move
-
-            # Each node knows the move that lead to it
-            # Save each move in path
-            # Ignore child since it does not need to know its own origin move in path
-            # Just append to path and go to parent
-            # Add path that contains child move to parents pareto front
-            # Add own origin move to path -> repeat till root
-
-            if current is not node: # Last node does not need to even have a pareto path since its a leaf
+            if current is not node:
                 self.update_pareto_paths(current, path)
-            
-            if current._last_move is not None:
-                path.append((move, current._values.copy()))
+
+            if move is not None:
+                # Build a node-relative ("to-go") objective vector for the archive
+                vals = leaf_values.copy()
+
+                # This to go approach makes nodes comparable at different depths of the tree objective wise
+                vals["step_count"] = leaf_values["step_count"] - current._real_values["step_count"]
+                vals["weight_shifted"] = leaf_values["weight_shifted"] - current._real_values["weight_shifted"]
+                vals["distance_to_goal"] = leaf_values["distance_to_goal"]  # simplest/minimal disruption
+
+                path.append((move, vals))
 
             current = current._parent
+
 
     def search(self, total_budget: int, per_sim_budget: int, simulations_per_child: int, rollout_func: int = 0, root_selection: int = 0, tree_selection: int = 0) -> None:
         """Methods that builds the tree and looks for solutions
@@ -629,7 +632,7 @@ class MctsTree():
 
             # Current root umsetzen
             current_root = root_sel_function(current_root)
-            Node.prune_siblings(current_root) # Remove siblings to prune tree
+            #Node.prune_siblings(current_root) # Remove siblings to prune tree
 
             if current_root.is_terminal_state():
                 solutions.append(current_root)

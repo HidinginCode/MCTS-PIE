@@ -14,8 +14,9 @@ import os
 import shutil
 import argparse
 import pandas as pd
+import pickle
 
-# from analyzer import Analyzer
+from analyzer import Analyzer
 
 def main():
     """ Main method that runs all components togehter"""
@@ -88,5 +89,19 @@ def simulations(map: str,
     tree.search(total_budget=budget, per_sim_budget=per_sim_budget, simulations_per_child=number_of_sims, rollout_func = rollout_method, root_selection = root_selection_method, tree_selection = tree_selection_method)
 
 if __name__ == "__main__":
-    simulations(map = "random_map", env_dim = 20, start = (0,10), goal=(19,10), budget=1000000, per_sim_budget=50, number_of_sims=500, rollout_method=0, root_selection_method=0, tree_selection_method=2)
-    #Analyzer.visualize_maps()
+    simulations(map = "random_map", env_dim = 20, start = (0,10), goal=(19,10), budget=1000000, per_sim_budget=50, number_of_sims=1000, rollout_method=0, root_selection_method=0, tree_selection_method=1)
+    
+    for dir in os.listdir("./log"):
+        for file in os.listdir(f"./log/{dir}"):
+            with open(f"./log/{dir}/{file}", "rb") as f:
+                solutions = pickle.load(f)
+                print(solutions)
+                input()
+                env = Environment(20, goal=(19,10), map_type="random_map", start_pos=(0,10))
+                moves = []
+                for i in range(len(solutions[0]['moves'])):
+                    moves.append((solutions[0]['moves'][i], solutions[0]['shifts'][i]))
+                print(moves)
+                input()
+                #Analyzer.interactive_step_path(env, start_pos=(0,10), moves=moves)
+                Analyzer.save_path_as_gif(env, start_pos=(0,10), moves=moves, gif_path="./final_path.gif")
