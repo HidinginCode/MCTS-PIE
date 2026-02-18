@@ -6,7 +6,9 @@ from copy import deepcopy
 def sim_wrapper(arg_list: tuple):
     print(f"Worker {os.getpid()} started working on {arg_list})")
     a,b,c,d,e,f,g,h,i,j,k,l = arg_list
-    simulations(a,b,c,d,e,f,g,h,i,j,k,l)
+    out_path = f"./log/{a}-{b}-{h}/{e}-{f}-{g}-{i}-{j}-{h}-{l}.pickle"
+    if not os.path.isfile(out_path):
+        simulations(a,b,c,d,e,f,g,h,i,j,k,l)
 
 def main():
     
