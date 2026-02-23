@@ -11,12 +11,19 @@ def sim_wrapper(arg_list: tuple):
         simulations(a,b,c,d,e,f,g,h,i,j,k,l)
 
 def main():
-    
+    cpus = int(os.environ.get("SLURM_CPUS_PER_TASK", "1"))
+    processes = min(cpus, os.cpu_count() or cpus)
+
+    rank = int(os.environ.get("SLURM_ARRAY_TASK_ID", "0"))
+    world = int(os.environ.get("SLURM_ARRAY_TASK_COUNT", "1"))
+
     param_grid = generate_param_combinations()
-    processes = 120
-    print(f"Opening pool with {min(processes, os.cpu_count())} workers...")
-    with mp.Pool(min(processes, os.cpu_count())) as p:
-        results = p.map(sim_wrapper, list(param_grid))
+    my_grid = list(param_grid)[rank::world]
+
+    print(f"[Shard {rank}/{world}] jobs={len(my_grid)} pool={processes}")
+
+    with mp.Pool(processes) as p:
+        p.map(sim_wrapper, my_grid)
 
     
 def generate_param_combinations():

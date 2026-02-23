@@ -1,15 +1,14 @@
 #!/bin/bash
-#SBATCH --job-name=masters-thesis
-#SBATCH --output=logs/job.out
-#SBATCH --error=logs/job.err
-#SBATCH --cpus-per-task=120
-#SBATCH --mem=120G
-#SBATCH --ntasks=1
+#SBATCH --job-name=experiments
 #SBATCH --partition=members
-#SBATCH --nodelist=ant6
+#SBATCH --output=logs/%x_%A_%a.out
+#SBATCH --error=logs/%x_%A_%a.err
 
+#SBATCH --nodes=1
+#SBATCH --cpus-per-task=48
+#SBATCH --mem=110G
+#SBATCH --array=0-11
+#SBATCH --exclude=ant13
 
-echo "Starting mcts job with 27 workers ..."
 source ../venv/bin/activate
 python run_experiments.py
-tar -czvf log.tar.gz log/

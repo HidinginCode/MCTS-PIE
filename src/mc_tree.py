@@ -259,7 +259,7 @@ class MctsTree():
         """
         Iterative rollout method that:
         1) Samples points in a square radius around the current position
-        2) Chooses a sampled point that is closest (Manhattan) to the current position
+        2) Chooses a sampled point that is closest (Manhattan) to the goal position
         3) Moves greedily towards that point, preferring low-weight cells
         4) Uses the controller's (move_dir, shift_dir) pairs to actually move
 
@@ -268,7 +268,7 @@ class MctsTree():
         - Less total weight shifted (avoid heavy cells where possible)
         """
 
-        sampling_radius = 5
+        sampling_radius = max(2, env_size // 10)
         sample_count = 5
         used_moves_total = 0
 
@@ -281,7 +281,7 @@ class MctsTree():
             dy = ay - by
             return (dx if dx >= 0 else -dx) + (dy if dy >= 0 else -dy)
 
-        # 4-neighborhood movement (matches Controller.DIRECTIONS in spirit)
+        # 4-neighborhood movement
         CARDINAL_DIRECTIONS = [
             (1, 0),   # east
             (-1, 0),  # west
@@ -302,7 +302,7 @@ class MctsTree():
             """
 
             env = controller._environment
-            env_grid = env._environment          # 2D weight map :contentReference[oaicite:2]{index=2}
+            env_grid = env._environment          # 2D weight map
             env_dim = env.env_dim
 
             current_x, current_y = start_pos
@@ -361,7 +361,7 @@ class MctsTree():
 
             environment = controller._environment
             env_size = environment.env_dim
-            goal_position = environment._goal
+            
 
             for _ in range(maximum_moves):
 
@@ -370,6 +370,10 @@ class MctsTree():
                     break
 
                 current_x, current_y = controller._current_pos
+                if not controller._goal_collected:
+                    goal_position = environment._goal
+                else:
+                    goal_position = environment._start_pos
 
                 # Sampling square bounds
                 min_x = max(0, current_x - sampling_radius)
@@ -383,9 +387,8 @@ class MctsTree():
                 if min_x <= goal_x <= max_x and min_y <= goal_y <= max_y:
                     next_sample_point = goal_position
                 else:
-                    # Otherwise: sample a few points around us and pick the closest
-                    current_pos = (current_x, current_y)
-                    next_sample_point = min(((random.randint(min_x, max_x), random.randint(min_y, max_y)) for _ in range(sample_count)), key=lambda p, cp=current_pos: manhattan_distance(p, cp))
+                    # Otherwise: sample a few points around us and pick the closest to the goal
+                    next_sample_point = min(((random.randint(min_x, max_x), random.randint(min_y, max_y)) for _ in range(sample_count)), key=lambda p: manhattan_distance((goal_x, goal_y), p))
 
                 # Get direction deltas for greedy movement towards next_sample_point
                 direction_deltas = greedy_step_towards_point((current_x, current_y), next_sample_point, controller)
@@ -438,7 +441,6 @@ class MctsTree():
             # Precompute constant
             dxg = start[0] - goal[0]
             dyg = start[1] - goal[1]
-            roundtrip_back = (dxg if dxg >= 0 else -dxg) + (dyg if dyg >= 0 else -dyg)
 
             def distance(pos):
                 x, y = pos
@@ -536,6 +538,9 @@ class MctsTree():
             node._pareto_paths = [p for p in node._pareto_paths if p not in dominated]
             node._paths_changed = True
             node._pareto_paths.append(copy.deepcopy(path))
+        
+        if len(node._pareto_paths) > self._max_solutions:
+            Helper.epsilon_clustering(node=node, max_archive_size=self._max_solutions)
             
 
     def backpropagate(self, node: Node, current_root: Node) -> None:
@@ -632,7 +637,7 @@ class MctsTree():
 
             # Current root umsetzen
             current_root = root_sel_function(current_root)
-            #Node.prune_siblings(current_root) # Remove siblings to prune tree
+            Node.prune_siblings(current_root) # Remove siblings to prune tree
 
             if current_root.is_terminal_state():
                 solutions.append(current_root)

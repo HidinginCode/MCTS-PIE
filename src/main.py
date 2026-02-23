@@ -7,16 +7,10 @@ from environment import Environment
 from node import Node
 from mc_tree import MctsTree
 from controller import Controller
-import random
-import numpy as np
-import moa_star
 import os
-import shutil
-import argparse
-import pandas as pd
 import pickle
 
-from analyzer import Analyzer
+#from analyzer import Analyzer
 
 def main():
     """ Main method that runs all components togehter"""
@@ -104,4 +98,4 @@ if __name__ == "__main__":
                 print(moves)
                 input()
                 #Analyzer.interactive_step_path(env, start_pos=(0,10), moves=moves)
-                Analyzer.save_path_as_gif(env, start_pos=(0,10), moves=moves, gif_path="./final_path.gif")
+                #Analyzer.save_path_as_gif(env, start_pos=(0,10), moves=moves, gif_path="./final_path.gif")
