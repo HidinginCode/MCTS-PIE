@@ -347,3 +347,57 @@ class Helper():
             eps += eps_steps
 
         node._pareto_paths = current
+
+    @staticmethod
+    def adaptive_epsilon_archiving_selection(node: Node, desired_p_number: int, eps: float = 0.03, eps_steps: float = 0.002) -> list:
+        """Returns the desired number of paths from a node using adaptive epsilon archiving.
+
+        Args:
+            node (Node): Node which's archive is used
+            desired_p_number (int): Desired number of paths to return
+            eps (float, optional): Start value for epsilon. Defaults to 1e-4.
+            eps_steps (float, optional): Steps to increase eps. Defaults to 0.001.
+        """
+
+        #print("Doing stuff ...", flush=True)
+        current = list(node._pareto_paths)
+        #print(f"Current pareto paths before aea: {current}")
+
+        # Nothing to compress
+        if len(current) < desired_p_number:
+            return
+
+        while len(current) > desired_p_number:
+
+            # Extract raw values from final entry of each path
+            # (value dict is always at path[-1][1])
+            raw_values = [path[-1][1] for path in current]
+
+            # Normalize using your stabilized min-max
+            normalized_dicts = Helper.normalize_archive(raw_values)
+
+            # Cell → (score, path)
+            archive = {}
+
+            for path, norm_dict in zip(current, normalized_dicts):
+                vec = np.array(list(norm_dict.values()), dtype=float)
+
+                # Epsilon grid cell in normalized space
+                cell = tuple(np.floor(vec / eps).astype(int))
+
+                # Balanced representative selection:
+                # Use L2 norm of normalized objective vector
+                score = float(np.linalg.norm(vec))
+
+                # Keep the one with lowest score (minimization)
+                if cell not in archive or score < archive[cell][0]:
+                    archive[cell] = (score, path)
+
+            # Keep only the representative paths
+            current = [entry[1] for entry in archive.values()]
+            #print(f"Current in loop: {current}")
+
+            eps += eps_steps
+        #print(f"Current pareto paths after aea: {current}")
+        return current
+

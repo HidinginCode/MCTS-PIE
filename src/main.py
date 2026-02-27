@@ -7,10 +7,11 @@ from environment import Environment
 from node import Node
 from mc_tree import MctsTree
 from controller import Controller
+import moa_star
 import os
-import pickle
+import multiprocessing as mp
 
-#from analyzer import Analyzer
+from analyzer import Analyzer
 
 def main():
     """ Main method that runs all components togehter"""
@@ -82,20 +83,63 @@ def simulations(map: str,
 
     tree.search(total_budget=budget, per_sim_budget=per_sim_budget, simulations_per_child=number_of_sims, rollout_func = rollout_method, root_selection = root_selection_method, tree_selection = tree_selection_method)
 
-if __name__ == "__main__":
-    simulations(map = "random_map", env_dim = 20, start = (0,10), goal=(19,10), budget=1000000, per_sim_budget=50, number_of_sims=1000, rollout_method=0, root_selection_method=0, tree_selection_method=1)
+def moa_wrapper(arguments: list):
+    """Wrapper for multi-processing analysis of moa-star paths.
+
+    Args:
+        solutions (list): run arguments
+    """
+    print(f"Process: {os.getpid()}")
+    if type(arguments) != list:
+        arguments = [arguments]
     
-    for dir in os.listdir("./log"):
-        for file in os.listdir(f"./log/{dir}"):
-            with open(f"./log/{dir}/{file}", "rb") as f:
-                solutions = pickle.load(f)
-                print(solutions)
-                input()
-                env = Environment(20, goal=(19,10), map_type="random_map", start_pos=(0,10))
+    for args in arguments:
+        #print(args, flush=True)
+        map_type = args["map_type"]
+        map_dim = args["map_dim"]
+        start = args["start"]
+        goal = args["goal"]
+
+        solutions = (moa_star.moa_star(start=start, goal=goal, env_dim=map_dim, map_type=map_type))
+        for x, solution in enumerate(solutions):
+            if solution is not None:
                 moves = []
-                for i in range(len(solutions[0]['moves'])):
-                    moves.append((solutions[0]['moves'][i], solutions[0]['shifts'][i]))
-                print(moves)
-                input()
-                #Analyzer.interactive_step_path(env, start_pos=(0,10), moves=moves)
-                #Analyzer.save_path_as_gif(env, start_pos=(0,10), moves=moves, gif_path="./final_path.gif")
+                for i in range(len(solution)-1):
+                    #print(solution[i+1][1])
+                    moves.append(solution[i+1][1])
+                env = Environment(env_dim=map_dim, goal=goal, map_type=map_type, start_pos=start)
+                Analyzer.save_path_as_gif(environment=env, start_pos=start, moves=moves, gif_path=f"./solutions/solution-{map_type}-{map_dim}-{x}.gif")
+
+if __name__ == "__main__":
+    #simulations(map = "easy_map", env_dim = 50, start = (0,25), goal=(49,25), budget=300000, per_sim_budget=75, number_of_sims=50, rollout_method=0, root_selection_method=0, tree_selection_method=0, seed=420)
+    
+    #for dir in os.listdir("./log"):
+    #    for file in os.listdir(f"./log/{dir}"):
+    #        with open(f"./log/{dir}/{file}", "rb") as f:
+    #            solutions = pickle.load(f)
+    #            print(solutions)
+    #            env = Environment(50, goal=(49,25), map_type="easy_map", start_pos=(0,25))
+    #            moves = []
+    #            for i in range(len(solutions[0]['moves'])):
+    #                moves.append((solutions[0]['moves'][i], solutions[0]['shifts'][i]))
+    #            print(moves)
+    #            #Analyzer.interactive_step_path(env, start_pos=(0,25), moves=moves)
+    #            Analyzer.save_path_as_gif(env, start_pos=(0,25), moves=moves, gif_path="./final_path.gif")
+    MAP_TYPES = ["random_map", "easy_map", "checkerboard_map", "meandering_river_map"]
+    MAP_DIMS = [35, 50]
+    os.makedirs("./solutions", exist_ok=True)
+
+    combinations = []
+    for map_type in MAP_TYPES:
+        for dim in MAP_DIMS:
+            combinations.append({
+                "map_type": map_type,
+                "map_dim": dim,
+                "start": (0,25) if dim == 50 else (0,17),
+                "goal": (49,25) if dim == 50 else (34,17)
+            })
+    
+    print(combinations)
+    with mp.Pool(len(combinations)) as p:
+        print(f"Opening pool with {len(combinations)} workers ...")
+        results = p.map(moa_wrapper, combinations)

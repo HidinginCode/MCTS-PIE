@@ -48,6 +48,12 @@ class MctsTree():
             Node: Root node of tree
         """
         return self._root
+    
+    def _can_expand(self, node: Node, C: float = 1.5, alpha: float = 0.5) -> bool:
+            """Progressive widening rule."""
+            num_children = len(node._children)
+            max_children = C * (node._visits ** alpha)
+            return num_children < max_children
 
     def tree_policy(self, root: Node, tree_sel_func: function) -> Node | None:
         """Tree policy that selects the path from the root to a leaf.
@@ -65,16 +71,119 @@ class MctsTree():
             
             # Check if the node has already reached the goal
             if current_node.is_terminal_state():
+                #print("Found terminal state")
                 return None
 
             # Check if the node is fully expanded
-            if current_node.get_untried_actions():
+            if current_node.get_untried_actions() and self._can_expand(current_node):
+                #print("Found node with untried actions")
                 return current_node
 
             # At this point we know that current_node is neither terminal nor has any expansion left
             # Safety check for children
             if current_node._children:
+                #print(f"Using tree policy: {tree_sel_func.__name__}")
                 current_node = tree_sel_func(current_node)
+
+    def hv_root_selection(self, root: Node) -> Node:
+        """Selects new root based on hypervolume of children.
+        Children of current root are passed through pareto filter and then HV contribution is calculated.
+
+        Args:
+            root (Node): Root node from which to choose one child
+
+        Returns:
+            Node: Chosen child node.
+        """
+        pareto_children = Helper.determine_pareto_front_from_nodes(root._children.values())
+        if not pareto_children:
+            return random.choice(list(root._children.values()))
+        
+        if len(pareto_children) == 1:
+            return pareto_children[0]
+        
+        values = [child._values for child in pareto_children]
+        hv_contrib = np.asarray(Helper.hypervolume_contributions(values), dtype=float)
+
+        if np.sum(hv_contrib) <= 1e-12:
+            return random.choice(pareto_children)
+        
+        probs = hv_contrib / np.sum(hv_contrib)
+        child_index = np.random.choice(len(pareto_children), p=probs)
+
+        return pareto_children[child_index]
+
+    def pareto_path_child_selection_aec(self, node: Node) -> Node:
+        """
+        Strong adaptive epsilon clustering child selection.
+
+        Improvements over basic AEC:
+        - adaptive number of clusters based on visits
+        - normalized objective space
+        - quality-weighted sampling
+        - exploration bonus (UCB-style)
+        - safe fallbacks
+        """
+
+        children = list(node._children.values())
+        if not children:
+            raise RuntimeError("AEC selection called on node without children")
+
+        # ---------- fallback if no pareto info ----------
+        if not node._pareto_paths:
+            return random.choice(children)
+
+        # ---------- adaptive number of clusters ----------
+        # grows slowly with experience
+        number_of_paths = max(2, int(np.sqrt(node._visits)))
+
+        # ---------- cluster pareto paths ----------
+        rep_paths = Helper.adaptive_epsilon_archiving_selection(node=node, desired_p_number=number_of_paths)
+
+        if not rep_paths:
+            return random.choice(children)
+
+        # ---------- extract objective values ----------
+        value_dicts = [path[-1][1] for path in rep_paths]
+
+        # normalize objectives for fair comparison
+        norm_values = Helper.normalize_archive(value_dicts)
+
+        # ---------- compute sampling weights ----------
+        weights = []
+
+        parent_visits = max(1, node._visits)
+        logN = np.log(parent_visits)
+
+        exploration_strength = 0.5   # tune if needed
+
+        for path, norm_dict in zip(rep_paths, norm_values):
+
+            # --- quality term (minimization) ---
+            vec = np.array(list(norm_dict.values()), dtype=float)
+            quality = 1.0 / (np.linalg.norm(vec) + 1e-9)
+
+            # --- exploration bonus ---
+            child_key = path[-1][0]
+            child = node._children.get(child_key)
+
+            if child is None or child._visits == 0:
+                exploration = 1.0   # strong push to unexplored
+            else:
+                exploration = exploration_strength * np.sqrt(logN / child._visits)
+
+            weights.append(quality + exploration)
+
+        # guard against all-zero weights
+        if sum(weights) <= 0:
+            return random.choice(children)
+
+        # ---------- sample representative ----------
+        chosen_path = random.choices(rep_paths, weights=weights, k=1)[0]
+
+        # ---------- follow corresponding child ----------
+        child_key = chosen_path[-1][0]
+        return node._children.get(child_key, random.choice(children))
 
     def pareto_path_child_selection_cd(self, node: Node) -> Node:
         """Method that selects a child from pareto_paths using the crowding distance.
@@ -592,13 +701,14 @@ class MctsTree():
             tree_selection (int): Inidcator which tree selection function to use.
         """
         match root_selection:
-            case 0: root_sel_function = Helper.epsilon_clustering_for_nodes
+            case 0: root_sel_function = self.hv_root_selection
             case _: raise ValueError("Did not supply a suitable root selection indicator")
         
         match tree_selection:
             case 0: tree_sel_function = self.ucb_child_selection
             case 1: tree_sel_function = self.pareto_path_child_selection_hv
             case 2: tree_sel_function = self.pareto_path_child_selection_cd
+            case 3: tree_sel_function = self.pareto_path_child_selection_aec
             case _: raise ValueError("Did not supply a suitable tree selection indicator")
         
         match rollout_func:
@@ -613,7 +723,7 @@ class MctsTree():
             # Set root to initial root
         current_root = self._root
         solutions = []
-        while not current_root.is_terminal_state() or current_root._depth >=400:
+        while (not current_root.is_terminal_state())and current_root._depth <= 400:
             used_simulation_counter = 0
             while used_simulation_counter < total_budget:
                 # Use tree policy
@@ -634,9 +744,12 @@ class MctsTree():
                         self.backpropagate(child, current_root)
                     else:
                         used_simulation_counter += per_sim_budget # For fast convergence in the end
+                else:
+                        used_simulation_counter += per_sim_budget
 
             # Current root umsetzen
             current_root = root_sel_function(current_root)
+            #print(f"New root at depth: {current_root._depth}")
             Node.prune_siblings(current_root) # Remove siblings to prune tree
 
             if current_root.is_terminal_state():
