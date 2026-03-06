@@ -56,6 +56,14 @@ class Logger:
         # race-safe directory creation for multiple processes
         os.makedirs(self._log_path, exist_ok=True)
 
+    def log_depth(self, depth: int):
+        """Logs the specified depth and the name of the experiment
+
+        Args:
+            depth (int): Depth to be logged
+        """
+        print(f"{self._total_budget}-{self._per_sim_budget}-{self._number_of_simulations}-{self._tree_selection_method}-{self._root_selection_method}-{self._simulation_method}-{self._seed}: Current root depth is at {depth} ...")
+
     def log_solutions(self, solutions: list[Node]) -> None:
         
         collected = []

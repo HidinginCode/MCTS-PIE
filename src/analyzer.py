@@ -2,6 +2,7 @@
 
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
+from matplotlib.patches import Rectangle, Patch
 import time
 import os
 import math
@@ -11,6 +12,8 @@ from environment import Environment
 from PIL import Image
 import tempfile
 import pickle
+import numpy as np
+import re
 
 class Analyzer:
     """Class that is used to log and create visual data."""
@@ -351,6 +354,7 @@ class Analyzer:
 
         for f in frames:
             os.remove(f)
+        print(f"Steps: {controller.step_count}, Weight: {controller.weight_shifted}")
 
         return gif_path
     
@@ -378,3 +382,77 @@ class Analyzer:
                 plt.title(f"{map_name}")
                 plt.savefig(os.path.join(out_path, dir.removesuffix(".pickle")+".png"))
                 plt.close()
+
+    @staticmethod
+    def visualize_map(pickle_file: str, output_svg: str):
+        # Load map
+        with open(pickle_file, "rb") as f:
+            env = pickle.load(f)
+
+        filename = os.path.basename(pickle_file)
+
+        # Remove extension
+        name = os.path.splitext(filename)[0]
+
+        # Remove dimension suffix
+        name = re.sub(r"_\d+x\d+$", "", name)
+
+        # Replace underscores with spaces
+        name = name.replace("_", " ")
+
+        print(name)
+
+        env = np.array(env)
+        env_dim = env.shape[0]
+
+        # Start and goal positions
+        start = (0, env_dim // 2)
+        goal = (env_dim - 1, env_dim // 2)
+
+        fig, ax = plt.subplots()
+
+        # Plot environment
+        im = ax.imshow(env, cmap="gray_r", origin="upper")
+
+        # Draw start square
+        start_square = Rectangle(
+            (start[1] - 0.5, start[0] - 0.5),
+            1, 1,
+            facecolor="green",
+            edgecolor="black",
+            linewidth=1.5
+        )
+        ax.add_patch(start_square)
+
+        # Draw goal square
+        goal_square = Rectangle(
+            (goal[1] - 0.5, goal[0] - 0.5),
+            1, 1,
+            facecolor="red",
+            edgecolor="black",
+            linewidth=1.5
+        )
+        ax.add_patch(goal_square)
+
+        # Legend
+        legend_elements = [
+            Patch(facecolor="green", edgecolor="black", label="Start"),
+            Patch(facecolor="red", edgecolor="black", label="Waypoint")
+        ]
+        ax.legend(handles=legend_elements, loc="upper right")
+
+        # Grid formatting
+        ax.set_xticks(np.arange(-0.5, env_dim, 1), minor=True)
+        ax.set_yticks(np.arange(-0.5, env_dim, 1), minor=True)
+        ax.grid(which="minor", color="black", linestyle="-", linewidth=0.3)
+        ax.tick_params(which="minor", bottom=False, left=False)
+
+        ax.set_title(name.title())
+
+        # Add colorbar
+        cbar = fig.colorbar(im, ax=ax)
+        cbar.set_label("Obstacle Weight")
+
+        # Save SVG
+        plt.savefig(output_svg, format="svg", bbox_inches="tight")
+        plt.close()

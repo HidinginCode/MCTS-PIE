@@ -10,6 +10,7 @@ from controller import Controller
 import moa_star
 import os
 import multiprocessing as mp
+from astar import A_Star
 
 from analyzer import Analyzer
 
@@ -110,10 +111,22 @@ def moa_wrapper(arguments: list):
                 env = Environment(env_dim=map_dim, goal=goal, map_type=map_type, start_pos=start)
                 Analyzer.save_path_as_gif(environment=env, start_pos=start, moves=moves, gif_path=f"./solutions/solution-{map_type}-{map_dim}-{x}.gif")
 
+def astar_wrapper(args: tuple) -> None:
+    """Multiprocessing wrapper for A-Star
+
+    Args:
+        args (tuple): Arguments
+    """
+    map_type, dim = args
+    print(f"Starting search for {map_type} {dim}x{dim}...")
+    solver = A_Star(map_type, dim, (0,int(dim/2)), (dim-1,int(dim/2)))
+    pareto = solver.epsilon_constraint_search()
+
+
 if __name__ == "__main__":
-    #simulations(map = "easy_map", env_dim = 50, start = (0,25), goal=(49,25), budget=300000, per_sim_budget=75, number_of_sims=50, rollout_method=0, root_selection_method=0, tree_selection_method=0, seed=420)
-    
-    #for dir in os.listdir("./log"):
+    #simulations(map = "easy_map", env_dim = 50, start = (0,25), goal=(49,25), budget=300000, per_sim_budget=75, number_of_sims=50, rollout_method=1, root_selection_method=0, tree_selection_method=0, seed=420)
+    #run_experiments.sim_wrapper(("easy_map", 50, (0,25), (49,25), 300000, 75, 50, 1, 0, 0, 20, 420))
+    # for dir in os.listdir("./log"):
     #    for file in os.listdir(f"./log/{dir}"):
     #        with open(f"./log/{dir}/{file}", "rb") as f:
     #            solutions = pickle.load(f)
@@ -125,21 +138,19 @@ if __name__ == "__main__":
     #            print(moves)
     #            #Analyzer.interactive_step_path(env, start_pos=(0,25), moves=moves)
     #            Analyzer.save_path_as_gif(env, start_pos=(0,25), moves=moves, gif_path="./final_path.gif")
-    MAP_TYPES = ["random_map", "easy_map", "checkerboard_map", "meandering_river_map"]
-    MAP_DIMS = [35, 50]
-    os.makedirs("./solutions", exist_ok=True)
+    # MAP_TYPES = ["random_map", "easy_map", "checkerboard_map", "meandering_river_map"]
+    # ENV_DIMS = [35, 50]
 
-    combinations = []
-    for map_type in MAP_TYPES:
-        for dim in MAP_DIMS:
-            combinations.append({
-                "map_type": map_type,
-                "map_dim": dim,
-                "start": (0,25) if dim == 50 else (0,17),
-                "goal": (49,25) if dim == 50 else (34,17)
-            })
-    
-    print(combinations)
-    with mp.Pool(len(combinations)) as p:
-        print(f"Opening pool with {len(combinations)} workers ...")
-        results = p.map(moa_wrapper, combinations)
+    # param_combinations = []
+    # for map_type in MAP_TYPES:
+    #     for dim in ENV_DIMS:
+    #         param_combinations.append((map_type, dim))
+
+    # with mp.Pool(max(2, os.cpu_count()-2)) as p:
+    #     results = p.map(astar_wrapper, param_combinations)
+
+    analyzer = Analyzer()
+    os.makedirs("./map_graphics", exist_ok=True)
+    for file in os.listdir("./maps"):
+        analyzer.visualize_map(f"./maps/{file}", f"./map_graphics/{file.removesuffix(".pickle")}.svg")
+        print(f"Visualized {file}")

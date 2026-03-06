@@ -376,10 +376,10 @@ class MctsTree():
         - Fewer steps (shorter geometric paths)
         - Less total weight shifted (avoid heavy cells where possible)
         """
-
-        sampling_radius = max(2, env_size // 10)
         sample_count = 5
         used_moves_total = 0
+        env_size = leaf._controller._environment.env_dim
+        sampling_radius = max(2, env_size // 10)
 
         results: list[Node] = []
 
@@ -411,7 +411,6 @@ class MctsTree():
             """
 
             env = controller._environment
-            env_grid = env._environment          # 2D weight map
             env_dim = env.env_dim
 
             current_x, current_y = start_pos
@@ -467,9 +466,7 @@ class MctsTree():
 
             leaf_clone = leaf.clone()
             controller = leaf_clone._controller
-
             environment = controller._environment
-            env_size = environment.env_dim
             
 
             for _ in range(maximum_moves):
@@ -751,6 +748,8 @@ class MctsTree():
             current_root = root_sel_function(current_root)
             #print(f"New root at depth: {current_root._depth}")
             Node.prune_siblings(current_root) # Remove siblings to prune tree
+            if current_root._depth %10 == 0:
+                log.log_depth(current_root._depth)
 
             if current_root.is_terminal_state():
                 solutions.append(current_root)

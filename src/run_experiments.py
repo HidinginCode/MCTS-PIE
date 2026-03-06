@@ -6,12 +6,43 @@ from copy import deepcopy
 def sim_wrapper(arg_list: tuple):
     print(f"Worker {os.getpid()} started working on {arg_list})")
     a,b,c,d,e,f,g,h,i,j,k,l = arg_list
-    out_path = f"./log/{a}-{b}-{h}/{e}-{f}-{g}-{i}-{j}-{h}-{l}.pickle"
+    # We need to match the case arguments for function to the appropriate names
+    # Rollout
+    h_string = "None"
+
+    # Child selection
+    i_string = "None"
+
+    # Root selection
+    j_string = "None"
+    print(f"h: {h}")
+    print(f"i: {i}")
+    print(f"j: {j}")
+
+    match i:
+        case 0: i_string = "hv_root_selection"
+        case _: raise ValueError("Did not supply a suitable root selection indicator")
+
+    match j:
+        case 0: j_string = "ucb_child_selection"
+        case 1: j_string = "pareto_path_child_selection_hv"
+        case 2: j_string = "pareto_path_child_selection_cd"
+        case 3: j_string = "pareto_path_child_selection_aec"
+        case _: raise ValueError("Did not supply a suitable tree selection indicator")
+    
+    match h:
+        case 0: h_string = "light_rollout"
+        case 1: h_string = "iterative_heavy_square_sampling_rollout"
+        case 2: h_string = "iterative_heavy_distance_weight_rollout"
+        case _: raise ValueError("Did not supply a suitable rollout function indicator")
+    
+    out_path = f"./log/{a}-{b}-{h_string}/{e}-{f}-{g}-{j_string}-{i_string}-{h_string}-{l}.pickle"
+    print(out_path)
     if not os.path.isfile(out_path):
         print(f"Starting simulation {a}-{b}-{h}/{e}-{f}-{g}-{i}-{j}-{h}-{l}", flush=True)
         simulations(a,b,c,d,e,f,g,h,i,j,k,l)
     else:
-        print(f"Skipping simulation {a}-{b}-{h}/{e}-{f}-{g}-{i}-{j}-{h}-{l}", flush=True)
+        print("Skipping...", flush=True)
 
 def main():
     cpus = int(os.environ.get("SLURM_CPUS_PER_TASK", "1"))
@@ -23,10 +54,11 @@ def main():
     param_grid = generate_param_combinations()
     my_grid = list(param_grid)[rank::world]
 
-    print(f"[Shard {rank}/{world}] jobs={len(my_grid)} pool={processes}")
+    print(f"[Shard {rank}/{world}] jobs={len(my_grid)} pool={cpus}")
+    chunksize = max(10, len(my_grid) // (cpus * 8))
 
     with mp.Pool(max(2, cpus), maxtasksperchild=20) as p:
-        p.map(sim_wrapper, param_grid)
+        p.map(sim_wrapper, my_grid, chunksize=chunksize)
 
     
 def generate_param_combinations():

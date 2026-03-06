@@ -7,49 +7,206 @@ import heapq
 from collections import defaultdict
 import os
 import pickle
-
-def dominates(cost_1: tuple, cost_2: tuple) -> bool:
-    """Determines if cost_1 pareto dominates cost_2.
-
-    Args:
-        cost_1 (dict): Cost dict 1
-        cost_2 (dict): Cost dict 2
-
-    Returns:
-        bool: Domination status
-    """
-    return all(a <= b for a, b in zip(cost_1, cost_2)) and any(a < b for a, b in zip(cost_1, cost_2))
+import math
 
 class MOA_Star_Node:
-    """Symbolizes a node in MOA-Star."""
+    """
+    Label used by MOA*.
+    Represents one Pareto cost label for a specific state.
+    """
 
-    def __init__(self, controller: Controller, g: tuple, h: tuple, parent: MOA_Star_Node | None):
-        """Init method for the MOA-Star node.
+    def __init__(self, controller: Controller, parent: "MOA_Star_Node | None", move=None):
+        self.controller = controller
+
+        # true accumulated cost
+        self.g = (self.controller._step_count, self.controller._weight_shifted)
+
+        # heuristic lower bound
+        self.h = self.heuristic()
+
+        # evaluation vector
+        self.f = tuple(gi + hi for gi, hi in zip(self.g, self.h))
+
+        # backtracking
+        self.parent = parent
+        self.move = move
+    
+    def heuristic(self):
+        controller = self.controller
+        manhattan = controller.calculate_distance_to_goal()
+
+        if not controller._goal_collected:
+            weight = controller.weight_to_goal[
+                controller.current_pos[0]
+            ][controller.current_pos[1]]
+        else:
+            weight = controller.weight_to_start[
+                controller._current_pos[0]
+            ][controller._current_pos[1]]
+
+        # slight coupling
+        manhattan_adjusted = manhattan + 0.05 * weight
+
+        return (manhattan_adjusted, weight)
+
+    def state_key(self) -> tuple:
+        """Returns the state key of the current node.
+
+        Returns:
+            tuple: State key
+        """
+        return (self.controller._current_pos, self.controller._goal_collected) #self.controller.obstacle_signature())
+
+
+def dominates(a, b):
+    return (
+        a[0] <= b[0] and
+        a[1] <= b[1] and
+        (a[0] < b[0] or a[1] < b[1])
+    )
+
+class OpenList:
+    def __init__(self):
+        self._global = []
+        self._by_state = defaultdict(list)
+
+    def __len__(self):
+        return len(self._global)
+
+    def insert(self, label: MOA_Star_Node) -> bool:
+        """Skyline insert method to insert new lables
 
         Args:
-            controller (Controller): Controller that has all information about state
-            g (tuple): Cost vector
-            h (tuple): Heurisitc cost vector
-            parent (MOA_Star_Node | None): Parent node
+            label (MOA_Star_Node): Node to insert
+
+        Returns:
+            bool: Was it inserted or not?
         """
-        self._controller = controller
-        self._g = g # Steps and weight
-        self._h = h # Step heuristic and dist heuristic
-        self._parent = parent
-        self._f = tuple(gi + hi for gi, hi in zip(g, h)) # Steps taken, weight shifted, estimated_distance to goal
-        self._move = None
-        self._waypoint_collected = False
+        state = label.state_key()
 
-def heuristic(controller: Controller) -> tuple:
-    """Returns the heuristic for a state encapsulated in a controller.
+        # 1) if dominated by existing label → reject
+        for other in self._by_state[state]:
+            if dominates(other.f, label.f):
+                return False
 
-    Args:
-        controller (Controller): Controller with state
-    """
-    dist = controller.calculate_distance_to_goal() # This is only the same since we use manhattan distance on a grid
-    return (0, 0)
+        # 2) find labels dominated by new label
+        dominated = [
+            other for other in self._by_state[state]
+            if dominates(label.f, other.f)
+        ]
 
+        # 3) remove dominated labels from BOTH structures
+        for other in dominated:
+            self._by_state[state].remove(other)
+            self._global.remove(other)
 
+        # 4) insert new label
+        self._by_state[state].append(label)
+        self._global.append(label)
+        return True
+    
+    def pop(self) -> MOA_Star_Node:
+        """Removes best node from open.
+
+        Returns:
+            MOA_Star_Node: Best node
+        """
+        best = min(self._global, key=lambda L: L.f)
+
+        self._global.remove(best)
+
+        state = best.state_key()
+
+        # safe removal (avoid crash if already removed elsewhere)
+        if best in self._by_state[state]:
+            self._by_state[state].remove(best)
+
+        return best
+    def cap(self, max_size: int = 20000):
+        """Limit total number of labels stored in OPEN."""
+        
+        if len(self._global) <= max_size:
+            return
+
+        # sort global pool by scalarized f
+        self._global.sort(key=lambda n: n.f[0] + n.f[1])
+
+        # remove worst nodes
+        to_remove = self._global[max_size:]
+        self._global = self._global[:max_size]
+
+        # IMPORTANT: also remove them from per-state storage
+        for node in to_remove:
+            state = node.state_key()
+            if state in self._by_state and node in self._by_state[state]:
+                self._by_state[state].remove(node)
+
+class ClosedList:
+    def __init__(self, max_labels_per_state: int = 5):
+        self._data = defaultdict(list)
+        self._max_labels = max_labels_per_state
+    
+    def __len__(self):
+        return sum(len(v) for v in self._data.values())
+
+    def is_dominated(self, label: MOA_Star_Node) -> bool:
+        """Checks whether a node needs to be pruned"""
+        state = label.state_key()
+
+        for g_old in self._data[state]:
+            if dominates(g_old, label.g):
+                return True
+
+        return False
+    
+    def insert(self, label: MOA_Star_Node) -> None:
+        """Insert label into CLOSED with skyline pruning and cap."""
+        state = label.state_key()
+        labels = self._data[state]
+
+        labels[:] = [
+            g_old for g_old in labels
+            if not dominates(label.g, g_old)
+        ]
+
+        labels.append(label.g)
+        if len(labels) > self._max_labels:
+            # keep most promising labels
+            # simple and effective score
+            labels.sort(key=lambda g: g[0] + g[1])
+            del labels[self._max_labels:]
+
+def create_sucessors(parent: MOA_Star_Node) -> list[MOA_Star_Node]:
+
+    valid_pairs = parent.controller.get_all_valid_pairs()
+    successors = []
+
+    px, py = parent.controller.current_pos
+    env = parent.controller.environment.environment
+
+    for move, shift in valid_pairs:
+
+        dx_m, dy_m = move
+        nx, ny = px + dx_m, py + dy_m
+
+        # collapse shifts when no weight
+        if env[nx][ny] == 0:
+            # skip all shift variations
+            shift = (0, 0)
+            controller_copy = parent.controller.clone()
+            controller_copy.move(move_dir=move, shift_dir=(0,0))
+            successors.append(MOA_Star_Node(controller_copy, parent, (move, (0,0))))
+            continue
+
+        controller_copy = parent.controller.clone()
+        controller_copy.move(move_dir=move, shift_dir=shift)
+
+        successors.append(
+            MOA_Star_Node(controller_copy, parent, (move, shift))
+        )
+
+    return successors
+        
 def reconstruct_path(node: MOA_Star_Node) -> list:
     """Reconstructs the path from a given end node.
 
@@ -69,7 +226,16 @@ def reconstruct_path(node: MOA_Star_Node) -> list:
     path.reverse()
     return path
 
-def moa_star(start: tuple, goal: tuple, env_dim: int, heuristic = heuristic, map_type: str = "random_map"):
+def prune_open_with_solutions(open_list, solutions):
+    if not solutions:
+        return
+
+    open_list[:] = [
+        node for node in open_list
+        if not any(dominates(sol.g, node.f) for sol in solutions)
+    ]
+
+def moa_star(start: tuple, goal: tuple, env_dim: int, heuristic = None, map_type: str = "random_map"):
     """Implementation of multi objective A-Star
 
     Args:
@@ -78,112 +244,59 @@ def moa_star(start: tuple, goal: tuple, env_dim: int, heuristic = heuristic, map
         heuristic (function): Function that defines the used heuristic
         map_type (str): Name of the maps
     """
-    print("Starting MOA-Star ...")
-    logger = AStarLogger()
-    start_evironment = Environment(env_dim, goal, map_type=map_type, start_pos=start)
-    start_controller = Controller(start_evironment, start)
 
-
-    start_node = MOA_Star_Node(start_controller, g=(0,0), h=heuristic(start_controller), parent=None)
-    front = [start_node]
-    cost_db = defaultdict(list)
-    open_db = defaultdict(list)
+    open = OpenList()
+    closed = ClosedList()
     solutions = []
-    start_state = get_state(start_node)
-    open_db[start_state].append(start_node)
 
-    #print("Entering loop ...")
-    while front:
-        # termination check FIRST
+    # Create start node -> Needs controller, g, h and parent
+    start_environment = Environment(env_dim=env_dim, goal=goal, map_type=map_type, start_pos=start)
+    start_controller = Controller(environment=start_environment, start_pos=start)
+    start_node = MOA_Star_Node(controller=start_controller, parent=None, move=None)
+
+    #Insert start node into open
+    open.insert(start_node)
+
+    while len(open) > 0:
         if solutions and all(
-            any(dominates(sol._g, node._f) for sol in solutions)
-            for node in front
+            any(dominates(sol.g, node.f) for sol in solutions)
+            for node in open._global
         ):
             break
+        print("OPEN:", len(open._global), "CLOSED:", len(closed))
+        current = open.pop()
 
-        current = current = front.pop(0)
-        current: MOA_Star_Node
+        if closed.is_dominated(current):
+            continue
         
-        # Check if goal reached
-        dist_to_goal = current._controller.calculate_distance_to_goal()
-        current._waypoint_collected = current._controller._goal_collected
-        #print(f"At pos {current._controller._current_pos}, dist = {dist_to_goal}, g = {current._g}")
+        closed.insert(current)
 
-        if dist_to_goal == 0:
-            if any(dominates(sol._g, current._g) for sol in solutions):
-                continue
-            solutions = [s for s in solutions if not dominates(current._g, s._g)]
+        # Test if current is goal node
+        current_controller = current.controller
+        if current_controller._goal_collected and current_controller._current_pos == current_controller._start_pos:
+            # check if dominated by existing solution -> needs to check g because we are interested in current state values
+            dominated = any(dominates(sol.g, current.g) for sol in solutions)
+            if dominated: continue
+
+            # Remove solutions that are dominated by current
+            solutions = [sol for sol in solutions if not dominates(current.g, sol.g)]
+
             solutions.append(current)
+            prune_open_with_solutions(open, solutions)
             continue
 
-        #print(len(front))
-        #input()
-        state = (
-            current._controller._current_pos,
-            current._controller._goal_collected
-        )
+        # Expand the succressors
+        sucessors = create_sucessors(parent=current)
 
-        if any(dominates(sol._g, current._g) for sol in solutions):
-            continue
+        for child in sucessors:
+            # Check if child is dominated by any solution
+            if any(dominates(sol.g, child.g) for sol in solutions):
+                continue
+            
+            open.insert(child)
         
-        labels = cost_db[state]
-
-        # Skip if current label is dominated by an existing one
-        # Skip if identical cost already exists
-        if current._g in labels:
-            continue
-
-        # Skip if dominated
-        if any(dominates(old, current._g) for old in labels):
-            continue
-
-        # Remove existing labels that are dominated by current
-        labels[:] = [old for old in labels if not dominates(current._g, old)]
-
-        # Insert current label
-        labels.append(current._g)
-
-        # Expand node
-        all_valid_moves = current._controller.get_all_valid_pairs()
-
-        for move_dir, shift_dir in all_valid_moves:
-            copy_controller = current._controller.clone()
-            copy_controller.move(move_dir, shift_dir)
-            g_new = (copy_controller.step_count, copy_controller._weight_shifted)
-            h_new = heuristic(copy_controller)
-            child = MOA_Star_Node(copy_controller, g_new, h_new, current)
-            child._move = (move_dir, shift_dir)
-            insert_open(front, open_db, child)
-            #print("Added child")
-    
-    solutions = pareto_filter(solutions)
-    for i, solution in enumerate(solutions):
-        logger.log(solution, i)
-    paths = [reconstruct_path(sol) for sol in solutions]
-    return paths
-
-def pareto_filter(nodes: list[MOA_Star_Node]) -> list:
-    """Pareto filter for MOA-Star nodes.
-
-    Args:
-        nodes (list(MOA_Star_Node)): Nodes to filter
-
-    Returns:
-        list: Pareto front
-    """
-    #print(f"Worker {os.getpid()} entered the pareto filter ...")
-    pareto = []
-    for node in nodes:
-        dominated = False
-        for other in nodes:
-            if other is not node and dominates(other._g, node._g):
-                dominated = True
-                break
-        if not dominated:
-            pareto.append(node)
-    print(f"Worker {os.getpid()} left the pareto filter ... Hurray")
-    return pareto
-
+        open.cap()
+            
 class AStarLogger():
     """This class contains the logger capabilities for the MOA-Star class."""
     def __init__(self):
@@ -209,52 +322,3 @@ class AStarLogger():
 
         with open(f"./moastar_log/{node._controller._environment._map_type}-{node._controller._environment._env_dim}/solution-{solution_index}.pickle", "wb") as f:
             pickle.dump(data, f)
-
-def pop_nondominated(front: list[MOA_Star_Node],
-                     open_db: dict) -> MOA_Star_Node:
-
-    for i, node in enumerate(front):
-        dominated = False
-        for other in front:
-            if other is not node and dominates(other._f, node._f):
-                dominated = True
-                break
-
-        if not dominated:
-            # Remove from OPEN DB skyline
-            state = get_state(node)
-            open_db[state].remove(node)
-            return front.pop(i)
-
-    raise RuntimeError("No nondominated node found")
-
-def insert_open(front, open_db, child):
-
-    state = get_state(child)
-    labels = open_db[state]
-
-    # If dominated by existing OPEN node of same state → discard
-    for node in labels:
-        if dominates(node._f, child._f):
-            return
-
-    # Find nodes dominated by child
-    dominated_nodes = [node for node in labels
-                       if dominates(child._f, node._f)]
-
-    # Remove dominated nodes from BOTH structures
-    for node in dominated_nodes:
-        labels.remove(node)
-        front.remove(node)
-
-    # Insert node into skyline
-    labels.append(child)
-
-    # Insert into global OPEN
-    front.append(child)
-
-def get_state(node: MOA_Star_Node):
-    return (
-        node._controller._current_pos,
-        node._controller._goal_collected
-    )
