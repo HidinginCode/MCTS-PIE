@@ -11,6 +11,7 @@ import moa_star
 import os
 import multiprocessing as mp
 from astar import A_Star
+import pickle
 
 from analyzer import Analyzer
 
@@ -121,6 +122,7 @@ def astar_wrapper(args: tuple) -> None:
     print(f"Starting search for {map_type} {dim}x{dim}...")
     solver = A_Star(map_type, dim, (0,int(dim/2)), (dim-1,int(dim/2)))
     pareto = solver.epsilon_constraint_search()
+    #solver.plot_pareto_front()
 
 
 if __name__ == "__main__":
@@ -138,19 +140,39 @@ if __name__ == "__main__":
     #            print(moves)
     #            #Analyzer.interactive_step_path(env, start_pos=(0,25), moves=moves)
     #            Analyzer.save_path_as_gif(env, start_pos=(0,25), moves=moves, gif_path="./final_path.gif")
-    # MAP_TYPES = ["random_map", "easy_map", "checkerboard_map", "meandering_river_map"]
-    # ENV_DIMS = [35, 50]
+    # MAP_TYPES = ["meandering_river_map"]#["random_map", "easy_map", "checkerboard_map", "meandering_river_map"]
+    # ENV_DIMS = [35]#, 50]
 
     # param_combinations = []
     # for map_type in MAP_TYPES:
     #     for dim in ENV_DIMS:
     #         param_combinations.append((map_type, dim))
 
-    # with mp.Pool(max(2, os.cpu_count()-2)) as p:
+    # with mp.Pool(1) as p:
     #     results = p.map(astar_wrapper, param_combinations)
 
-    analyzer = Analyzer()
-    os.makedirs("./map_graphics", exist_ok=True)
-    for file in os.listdir("./maps"):
-        analyzer.visualize_map(f"./maps/{file}", f"./map_graphics/{file.removesuffix(".pickle")}.svg")
-        print(f"Visualized {file}")
+    # analyzer = Analyzer()
+    # os.makedirs("./map_graphics", exist_ok=True)
+    # for file in os.listdir("./maps"):
+    #     analyzer.visualize_map(f"./maps/{file}", f"./map_graphics/{file.removesuffix(".pickle")}.svg")
+    #     print(f"Visualized {file}")
+
+    # analyzer = Analyzer()
+    # for dir in os.listdir("./log"):
+    #     analyzer.extract_pareto_front(f"./log/{dir}")
+    # analyzer.plot_pareto_maps()
+
+    # for dir in os.listdir("./log"):
+    #     for file in os.listdir(f"./log/{dir}"):
+    #         filepath = f"./log/{dir}/{file}"
+    #         with open(filepath, "rb") as f:
+    #             data = pickle.load(f)
+    #         if file.__contains__("ucb") and data==None:
+    #             print("Ding")
+
+    Analyzer.interactive_manual_control(
+    map_type="checkerboard_map",   # or "easy_map", "checkerboard_map", "meandering_river_map"
+    env_dim=51,
+    start_pos=(0, 25),
+    goal=(50, 25),           # optional, defaults to (env_dim-1, env_dim-1)
+    )

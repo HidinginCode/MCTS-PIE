@@ -5,6 +5,8 @@ from controller import Controller
 from environment import Environment
 from analyzer import Analyzer
 import random
+import matplotlib.pyplot as plt
+import numpy as np
 
 class A_Star:
 
@@ -38,7 +40,6 @@ class A_Star:
 
     def manhattan(self, a, b):
         return abs(a[0] - b[0]) + abs(a[1] - b[1])
-
 
     def valid_moves(self, pos):
         moves = [(1,0),(0,1),(-1,0),(0,-1)]
@@ -176,7 +177,7 @@ class A_Star:
     # ------------------------------------------------------------
 
     def epsilon_constraint_search(self):
-        max_epsilon = self.env_dim*2+30
+        max_epsilon = self.env_dim*3
 
         pareto = []
 
@@ -208,6 +209,7 @@ class A_Star:
                 real_paths.append(real_path)
         
         self.logging(real_paths)
+        self.plot_pareto_front()
 
         return real_paths
     
@@ -240,9 +242,6 @@ class A_Star:
             if controller._environment._environment[next_pos[0]][next_pos[1]] != 0:
                 for shift in valid_shifts:
                     shifting_pos = (next_pos[0]+shift[0], next_pos[1]+shift[1])
-                    print(next_pos)
-                    print(shifting_pos)
-                    print(path.count(shifting_pos))
                     if shifting_pos not in path:
                         good_shifts.append(shift)
                 if len(good_shifts) == 0:
@@ -316,7 +315,92 @@ class A_Star:
                 controller.move(move, shift)
             tuples.append((controller.step_count, controller.weight_shifted, solution))
         
+        for steps, weight, _ in tuples:
+            print(f"Steps: {steps}, Weight: {weight}")
+        
+
         self.pareto_filter_with_paths(tuples)
-        print(self.pareto_values)
+        #print(self.pareto_values)
         for i, pareto_sol in enumerate(self.pareto_values):
-            Analyzer.save_path_as_gif(self.env, self.start, pareto_sol[-1], f"{gif_path}/solution-{i}.gif")
+            #print(pareto_sol[-1])
+            print(f"{i}: {pareto_sol[0]}, {pareto_sol[1]}")
+            self.plot_path(pareto_sol[-1], filename=f"path-{i}.svg")
+
+    def plot_pareto_front(self) -> None:
+        """Plots the Pareto front of the A* epsilon-constraint search as an SVG."""
+
+        if not self.pareto_values:
+            print("No Pareto values to plot. Run epsilon_constraint_search() first.")
+            return
+
+        graphics_path = f"./graphics/all_maps-a_star/"
+        os.makedirs(graphics_path, exist_ok=True)
+
+        steps   = [p[0] for p in self.pareto_values]
+        weights = [p[1] for p in self.pareto_values]
+
+        fig, ax = plt.subplots(figsize=(10, 6))
+        ax.scatter(steps, weights, marker="o", color="steelblue", zorder=3)
+
+        # Connect points with a step-line to visualise the front shape
+        #ax.step(steps, weights, where="post", color="steelblue", linewidth=1, alpha=0.5)
+
+        ax.set_xlabel("Step Count")
+        ax.set_ylabel("Weight Shifted")
+        ax.set_title(
+            f"Pareto Front - {self.map_name.replace('_', ' ').title()} {self.env_dim}x{self.env_dim}"
+        )
+        ax.grid(True)
+
+        plt.tight_layout()
+        out_path = f"{graphics_path}/{self.map_name}-{self.env_dim}.svg"
+        plt.savefig(out_path, bbox_inches="tight")
+        plt.close()
+        print(f"Saved: {out_path}")
+
+    def plot_path(self, solution: list, filename: str = "path.svg") -> None:
+        """Visualizes a solution path on the map as an SVG.
+
+        Args:
+            solution (list): List of (move, shift) tuples from shifting_optimization
+            filename (str): Output filename
+        """
+
+        graphics_path = f"./a_star_log/{self.map_name}-{self.env_dim}"
+        os.makedirs(graphics_path, exist_ok=True)
+
+        # Replay the solution to reconstruct the path
+        controller = Controller(environment=self.env, start_pos=self.start)
+        visited = [self.start]
+        for move, shift in solution:
+            controller.move(move, shift)
+            visited.append(controller.current_pos)
+
+        # Draw the grid weights as a heatmap
+        grid = np.array(self.grid)
+        fig, ax = plt.subplots(figsize=(10, 10))
+        ax.imshow(grid, cmap="gray_r", origin="upper")
+
+        # Overlay the path
+        path_rows = [p[0] for p in visited]
+        path_cols = [p[1] for p in visited]
+        ax.plot(path_cols, path_rows, color="cyan", linewidth=1.5, zorder=2)
+
+        # Mark start, goal, and end
+        ax.scatter(self.start[1], self.start[0], color="lime",  s=100, zorder=3, label="Start")
+        ax.scatter(self.goal[1],  self.goal[0],  color="red",   s=100, zorder=3, label="Waypoint")
+
+        ax.set_title(
+            f"{self.map_name.replace('_', ' ').title()} {self.env_dim}x{self.env_dim}\n"
+            f"Steps: {controller.step_count}  |  Weight Shifted: {controller.weight_shifted:.2f}"
+        )
+        ax.legend(loc="upper right")
+        ax.set_xlabel("X-Axis")
+        ax.set_ylabel("Y-Axis")
+        im = ax.imshow(grid, cmap="gray_r", origin="upper")
+        plt.colorbar(im, ax=ax, label="Cell Weight")
+        plt.tight_layout()
+        out_path = f"{graphics_path}/{filename}"
+        plt.savefig(out_path, bbox_inches="tight")
+        plt.close()
+        print(f"Saved: {out_path}")
