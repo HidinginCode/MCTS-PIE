@@ -45,9 +45,14 @@ class Helper():
     
     @staticmethod
     def stable_minmax(matrix: np.ndarray, eps: float = 1e-9) -> np.ndarray:
-        """
-        Safe [0,1] min-max normalization.
-        Used in epsilon-clustering and crowding distance.
+        """Safe [0,1] min-max normalization.
+
+        Args:
+            matrix (np.ndarray): Value matrix (vector)
+            eps (float, optional): Epsilon. Defaults to 1e-9.
+
+        Returns:
+            np.ndarray: Normalized values
         """
         mins = matrix.min(axis=0)
         maxs = matrix.max(axis=0)
@@ -57,10 +62,16 @@ class Helper():
         return (matrix - mins) / ranges
         
     @staticmethod
-    def determine_pareto_front_from_nodes(nodes, use_ucb_values=False):
-        """
-        FAST Pareto-front computation using Kung's O(n log n) skyline algorithm.
+    def determine_pareto_front_from_nodes(nodes: list, use_ucb_values: bool =False) -> list:
+        """FAST Pareto-front computation using Kung's O(n log n) skyline algorithm.
         Minimization for 3 objectives.
+
+        Args:
+            nodes (list): List of nodes 
+            use_ucb_values (bool, optional): Flag for usage of UCB values. Defaults to False.
+
+        Returns:
+            list: Pareto front
         """
 
         if not nodes:
@@ -145,9 +156,13 @@ class Helper():
         """
         Compute HV contribution for each point in a non-dominated set.
 
-        - points: list of objective dicts (minimization)
-        - returns: list of contributions aligned with input order
+        Args:
+            points (list): list of objective dicts
+        
+        Returns
+            list: list of contributions aligned with input order
         """
+        
         values = [list(p.values()) for p in points]
         S = Helper.stable_minmax(np.array(values, dtype=float))  # shape (n, m)
 
@@ -161,7 +176,7 @@ class Helper():
             hv = HV.Hypervolume(ref_point=np.array(ref))
             return [float(hv.do(S))]
 
-        # Reference point (same idea as your single-point code)
+        # Reference point
         worst = np.max(S, axis=0)
         ranges = np.max(S, axis=0) - np.min(S, axis=0)
         ref = worst + 0.1 * (ranges + 1e-12)
@@ -202,7 +217,7 @@ class Helper():
         keys = list(archive[0].keys())
         values = np.array([[d[k] for k in keys] for d in archive], dtype=float)
 
-        # Use the robust min-max helper (handles tiny ranges safely)
+        # Normalize values using stable min-max
         normalized_values = Helper.stable_minmax(values)
 
         # Rebuild list of dicts
@@ -282,7 +297,7 @@ class Helper():
             inf_mask[idx[0]] = True
             inf_mask[idx[-1]] = True
 
-            # Normalize objective values (avoid division by zero)
+            # Normalize objective values
             min_m = sorted_front[0]
             max_m = sorted_front[-1]
             denom = max_m - min_m
@@ -307,6 +322,12 @@ class Helper():
         - Uses stable min-max normalization internally (via normalize_archive)
         - Uses L2-norm of normalized objective vectors to choose cell representatives
         - Preserves all existing control flow and archive structure
+
+        Args:
+            node (Node): Node whichs archive to use
+            max_archive_size (int): Number of solutions that should be selected
+            eps (float): Initial epsilon value. Defaults to 1e-4.
+            eps_steps (float): Steps in which to increase epsilon. Defaults to 0.001
         """
 
         current = list(node._pareto_paths)

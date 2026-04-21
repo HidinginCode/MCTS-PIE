@@ -8,9 +8,26 @@ import random
 import matplotlib.pyplot as plt
 import numpy as np
 
+PARETO_RCPARAMS = {
+    "font.size":       9,
+    "axes.titlesize":  11,
+    "axes.labelsize":  9,
+    "xtick.labelsize": 9,
+    "ytick.labelsize": 9,
+    "legend.fontsize": 9,
+}
+
 class A_Star:
 
     def __init__(self, map_name: str, env_dim: int, start: tuple, goal: tuple):
+        """Init method for the a star class.
+
+        Args:
+            map_name (str): Name of the map as a string
+            env_dim (int): Dimension of the map
+            start (tuple): Start coordinate 
+            goal (tuple): Goal Coordinate
+        """
         self.map_name = map_name
         self.env_dim = env_dim
         self.start = start
@@ -31,7 +48,16 @@ class A_Star:
     # ------------------------------------------------------------
 
     class Node:
-        def __init__(self, pos, goal_collected, steps, weight_sum, parent=None):
+        def __init__(self, pos: tuple, goal_collected: bool, steps: int, weight_sum: float, parent: Node = None):
+            """Init method for the node class used in A-Star.
+
+            Args:
+                pos (tuple): Position of the agent
+                goal_collected (bool): Waypoint collection flag
+                steps (int): Steps taken
+                weight_sum (float): Weight shifted
+                parent (Node, optional): Parent node. Defaults to None.
+            """
             self.pos = pos
             self.goal_collected = goal_collected
             self.steps = steps
@@ -52,7 +78,7 @@ class A_Star:
 
 
     # ------------------------------------------------------------
-    # Phase A: Compute minimal steps (pure geometry)
+    # Phase 1: Compute minimal steps
     # ------------------------------------------------------------
 
     def compute_shortest_steps(self):
@@ -86,7 +112,6 @@ class A_Star:
 
                 next_steps = steps + 1
 
-                # heuristic
                 if not next_goal_collected:
                     h = self.manhattan(next_pos, self.goal) + \
                         self.manhattan(self.goal, self.start)
@@ -104,7 +129,7 @@ class A_Star:
 
 
     # ------------------------------------------------------------
-    # Phase B: Minimize weight under step constraint
+    # Phase 2: Minimize weight under step constraint
     # ------------------------------------------------------------
 
     def minimize_weight_with_step_bound(self, step_limit):
@@ -114,8 +139,7 @@ class A_Star:
 
         start_node = self.Node(self.start, False, 0, 0, None)
 
-        heapq.heappush(open_list,
-                    (0, counter, start_node))
+        heapq.heappush(open_list, (0, counter, start_node))
 
         closed = {}
 
@@ -145,7 +169,7 @@ class A_Star:
             closed[state] = current.weight_sum
 
             if current.goal_collected and current.pos == self.start:
-                return current  # return full node
+                return current
 
             for next_pos in self.valid_moves(current.pos):
 
@@ -166,8 +190,7 @@ class A_Star:
                 )
 
                 counter += 1
-                heapq.heappush(open_list,
-                            (next_weight, counter, next_node))
+                heapq.heappush(open_list, (next_weight, counter, next_node))
 
         return None
 
@@ -177,7 +200,7 @@ class A_Star:
     # ------------------------------------------------------------
 
     def epsilon_constraint_search(self):
-        max_epsilon = self.env_dim*3
+        max_epsilon = self.env_dim * 3
 
         pareto = []
 
@@ -201,23 +224,24 @@ class A_Star:
 
             print(f"ε={epsilon} -> steps={steps}, weight={weight}")
 
-        #self.logging(pareto)
         real_paths = []
         for p in pareto:
             real_path = self.shifting_optimization(p)
             if real_path is not None:
                 real_paths.append(real_path)
-        
+
         self.logging(real_paths)
         self.plot_pareto_front()
 
         return real_paths
-    
-    #-------------------------------------------------------------
+
+
+    # ------------------------------------------------------------
     # Optimize shifting
-    #-------------------------------------------------------------
+    # ------------------------------------------------------------
+
     def shifting_optimization(self, solution: tuple) -> list:
-        """Optimizes the shifts for the already optimized path
+        """Optimizes the shifts for the already optimized path.
 
         Args:
             solution (tuple): Solution from epsilon constraint search
@@ -225,64 +249,59 @@ class A_Star:
         Returns:
             list: Moves and shifts
         """
-
         original_steps, original_weight, path = solution
         controller = Controller(environment=self.env, start_pos=self.start)
 
         formatted_path = []
-        for i in range(len(path)-1):
+        for i in range(len(path) - 1):
             current_pos = path[i]
-            next_pos = path[i+1]
-            corresponding_move = (next_pos[0]-current_pos[0], next_pos[1]-current_pos[1])
-            
+            next_pos = path[i + 1]
+            corresponding_move = (next_pos[0] - current_pos[0], next_pos[1] - current_pos[1])
+
             valid_moves = controller.get_all_valid_pairs()
             valid_shifts = [pair[1] for pair in valid_moves if pair[0] == corresponding_move]
-            
+
             good_shifts = []
             if controller._environment._environment[next_pos[0]][next_pos[1]] != 0:
                 for shift in valid_shifts:
-                    shifting_pos = (next_pos[0]+shift[0], next_pos[1]+shift[1])
+                    shifting_pos = (next_pos[0] + shift[0], next_pos[1] + shift[1])
                     if shifting_pos not in path:
                         good_shifts.append(shift)
                 if len(good_shifts) == 0:
-                    formatted_path = None
-                    return formatted_path
+                    return None
                 formatted_path.append((corresponding_move, random.choice(good_shifts)))
             else:
                 formatted_path.append((corresponding_move, random.choice(valid_shifts)))
             controller.move(formatted_path[-1][0], formatted_path[-1][1])
+
         return formatted_path
 
-    
-    def reconstruct_path(self, node):
 
+    def reconstruct_path(self, node: Node) -> list:
+        """Function that reconstructs the taken path from the goal node.
+
+        Args:
+            node (Node): Goal node
+
+        Returns:
+            list: Visited positions
+        """
         path = []
-
         while node is not None:
             path.append(node.pos)
             node = node.parent
-
         path.reverse()
         return path
 
+
     def pareto_filter_with_paths(self, points):
-        """
-        points: list of (f1, f2, path)
-
-        Returns:
-            list of non-dominated (f1, f2, path)
-            without exact duplicates.
-        """
-
-        # Remove exact duplicates first
+        """Filters points and returns non-dominated (f1, f2, path) without duplicates."""
         unique = {}
         for f1, f2, path in points:
             key = (f1, f2, tuple(path))
             unique[key] = (f1, f2, path)
 
         points = list(unique.values())
-
-        # Sort by first objective
         points.sort(key=lambda x: x[0])
 
         pareto = []
@@ -295,112 +314,216 @@ class A_Star:
 
         self.pareto_values = pareto
 
+
+######################################
+#   Logging and Plotting
+######################################
+
     def logging(self, solutions: list) -> None:
-        """Logging function for found solution.
+        """Logging function for found solutions.
 
         Args:
             solutions (list): Found solutions
         """
-
         log_path = f"./a_star_log/{self.map_name}-{self.env_dim}"
-        gif_path = log_path+"/gifs"
-        os.makedirs(log_path, exist_ok = True)
-        os.makedirs(gif_path, exist_ok = True)
-        
+        gif_path = log_path + "/gifs"
+        os.makedirs(log_path, exist_ok=True)
+        os.makedirs(gif_path, exist_ok=True)
+
         tuples = []
-        for i, solution in enumerate(solutions):
+        for solution in solutions:
             controller = Controller(environment=self.env, start_pos=self.start)
             for step in solution:
                 move, shift = step
                 controller.move(move, shift)
             tuples.append((controller.step_count, controller.weight_shifted, solution))
-        
+
         for steps, weight, _ in tuples:
             print(f"Steps: {steps}, Weight: {weight}")
-        
 
         self.pareto_filter_with_paths(tuples)
-        #print(self.pareto_values)
+
         for i, pareto_sol in enumerate(self.pareto_values):
-            #print(pareto_sol[-1])
             print(f"{i}: {pareto_sol[0]}, {pareto_sol[1]}")
             self.plot_path(pareto_sol[-1], filename=f"path-{i}.svg")
 
+
     def plot_pareto_front(self) -> None:
         """Plots the Pareto front of the A* epsilon-constraint search as an SVG."""
-
         if not self.pareto_values:
             print("No Pareto values to plot. Run epsilon_constraint_search() first.")
             return
 
-        graphics_path = f"./graphics/all_maps-a_star/"
+        graphics_path = f"./graphics/all_maps-a_star"
         os.makedirs(graphics_path, exist_ok=True)
 
         steps   = [p[0] for p in self.pareto_values]
         weights = [p[1] for p in self.pareto_values]
 
-        fig, ax = plt.subplots(figsize=(10, 6))
-        ax.scatter(steps, weights, marker="o", color="steelblue", zorder=3)
+        with plt.rc_context(PARETO_RCPARAMS):
+            fig, ax = plt.subplots(figsize=(4.5, 3.8))
+            ax.scatter(steps, weights, marker="o", color="steelblue", zorder=3)
+            ax.set_xlabel("Step Count")
+            ax.set_ylabel("Weight Shifted")
 
-        # Connect points with a step-line to visualise the front shape
-        #ax.step(steps, weights, where="post", color="steelblue", linewidth=1, alpha=0.5)
+            if len(self.pareto_values) != 1:
+                ax.set_title(
+                    f"Pareto Front - {self.map_name.replace('_', ' ').title()} {self.env_dim}x{self.env_dim}"
+                )
+            else:
+                ax.set_title(
+                    f"Pareto Optimal Solution - {self.map_name.replace('_', ' ').title()} {self.env_dim}x{self.env_dim}"
+                )
 
-        ax.set_xlabel("Step Count")
-        ax.set_ylabel("Weight Shifted")
-        ax.set_title(
-            f"Pareto Front - {self.map_name.replace('_', ' ').title()} {self.env_dim}x{self.env_dim}"
-        )
-        ax.grid(True)
-
-        plt.tight_layout()
-        out_path = f"{graphics_path}/{self.map_name}-{self.env_dim}.svg"
-        plt.savefig(out_path, bbox_inches="tight")
-        plt.close()
+            ax.grid(True)
+            plt.tight_layout()
+            out_path = f"{graphics_path}/{self.map_name}-{self.env_dim}.svg"
+            plt.savefig(out_path, bbox_inches="tight")
+            plt.close()
         print(f"Saved: {out_path}")
+
 
     def plot_path(self, solution: list, filename: str = "path.svg") -> None:
         """Visualizes a solution path on the map as an SVG.
+
+        Executes all (move, shift) pairs via a fresh controller so the
+        displayed grid reflects the actual modified environment after the
+        run - weights that were shifted appear in their new positions.
 
         Args:
             solution (list): List of (move, shift) tuples from shifting_optimization
             filename (str): Output filename
         """
-
         graphics_path = f"./a_star_log/{self.map_name}-{self.env_dim}"
         os.makedirs(graphics_path, exist_ok=True)
 
-        # Replay the solution to reconstruct the path
+        # Fresh controller - each plot is independent and does not pollute self.env
         controller = Controller(environment=self.env, start_pos=self.start)
         visited = [self.start]
         for move, shift in solution:
             controller.move(move, shift)
             visited.append(controller.current_pos)
 
-        # Draw the grid weights as a heatmap
-        grid = np.array(self.grid)
-        fig, ax = plt.subplots(figsize=(10, 10))
-        ax.imshow(grid, cmap="gray_r", origin="upper")
+        # Capture the grid AFTER all moves so shifted weights are visible
+        grid = np.array(controller._environment._environment)
 
-        # Overlay the path
-        path_rows = [p[0] for p in visited]
-        path_cols = [p[1] for p in visited]
-        ax.plot(path_cols, path_rows, color="cyan", linewidth=1.5, zorder=2)
+        with plt.rc_context(PARETO_RCPARAMS):
+            fig, ax = plt.subplots(figsize=(6, 5))
+            im = ax.imshow(grid, cmap="gray_r", origin="upper")
 
-        # Mark start, goal, and end
-        ax.scatter(self.start[1], self.start[0], color="lime",  s=100, zorder=3, label="Start")
-        ax.scatter(self.goal[1],  self.goal[0],  color="red",   s=100, zorder=3, label="Waypoint")
+            path_rows = [p[0] for p in visited]
+            path_cols = [p[1] for p in visited]
+            ax.plot(path_cols, path_rows, color="orange", linewidth=3, zorder=2)
 
-        ax.set_title(
-            f"{self.map_name.replace('_', ' ').title()} {self.env_dim}x{self.env_dim}\n"
-            f"Steps: {controller.step_count}  |  Weight Shifted: {controller.weight_shifted:.2f}"
-        )
-        ax.legend(loc="upper right")
-        ax.set_xlabel("X-Axis")
-        ax.set_ylabel("Y-Axis")
-        im = ax.imshow(grid, cmap="gray_r", origin="upper")
-        plt.colorbar(im, ax=ax, label="Cell Weight")
-        plt.tight_layout()
-        out_path = f"{graphics_path}/{filename}"
-        plt.savefig(out_path, bbox_inches="tight")
-        plt.close()
+            ax.scatter(self.start[1], self.start[0], color="lime", s=60, zorder=3, label="Start")
+            ax.scatter(self.goal[1],  self.goal[0],  color="red",  s=60, zorder=3, label="Waypoint")
+
+            ax.set_title(
+                f"{self.map_name.replace('_', ' ').title()} {self.env_dim}x{self.env_dim}\n"
+                f"Steps: {controller.step_count}  |  Weight Shifted: {controller.weight_shifted:.2f}"
+            )
+            ax.legend(loc="upper right")
+            ax.set_xlabel("X-Axis")
+            ax.set_ylabel("Y-Axis")
+            plt.colorbar(im, ax=ax, label="Cell Weight")
+            plt.tight_layout()
+            out_path = f"{graphics_path}/{filename}"
+            plt.savefig(out_path, bbox_inches="tight")
+            plt.close()
         print(f"Saved: {out_path}")
+
+
+    def plot_pareto_comparison(self, analyzer: Analyzer) -> None:
+        """Compares the A* Pareto front against the MCTS global Pareto front graphically.
+
+        Args:
+            analyzer (Analyzer): Analyzer instance with loaded map_container
+        """
+        if not self.pareto_values:
+            print("No A* Pareto values to plot. Run epsilon_constraint_search() first.")
+            return
+
+        map_key     = (self.map_name, self.env_dim)
+        mcts_points = analyzer.map_container.get(map_key, [])
+
+        if not mcts_points:
+            print(f"No MCTS data found for {self.map_name} {self.env_dim}x{self.env_dim}.")
+            return
+
+        def pareto_filter_mcts(points):
+            pareto = []
+            for p in points:
+                dominated = False
+                for q in points:
+                    if (
+                        q["values"]["step_count"]    <= p["values"]["step_count"]
+                        and q["values"]["weight_shifted"] <= p["values"]["weight_shifted"]
+                    ) and (
+                        q["values"]["step_count"]    < p["values"]["step_count"]
+                        or q["values"]["weight_shifted"] < p["values"]["weight_shifted"]
+                    ):
+                        dominated = True
+                        break
+                if not dominated:
+                    pareto.append(p)
+            return pareto
+
+        mcts_pareto  = pareto_filter_mcts(mcts_points)
+        mcts_sorted  = sorted(mcts_pareto, key=lambda p: p["values"]["step_count"])
+        mcts_steps   = [p["values"]["step_count"]    for p in mcts_sorted]
+        mcts_weights = [p["values"]["weight_shifted"] for p in mcts_sorted]
+
+        astar_steps   = [p[0] for p in self.pareto_values]
+        astar_weights = [p[1] for p in self.pareto_values]
+
+        graphics_path = f"./graphics/comparison/"
+        os.makedirs(graphics_path, exist_ok=True)
+
+        with plt.rc_context(PARETO_RCPARAMS):
+            fig, ax = plt.subplots(figsize=(4.5, 3.8))
+
+            ax.scatter(mcts_steps,   mcts_weights,   marker="o", color="steelblue",
+                       zorder=3, label=f"MCTS ({len(mcts_pareto)} pts)")
+            ax.scatter(astar_steps,  astar_weights,  marker="o", color="crimson",
+                       zorder=3, label=f"A* ({len(self.pareto_values)} pts)")
+
+            ax.set_xlabel("Step Count")
+            ax.set_ylabel("Weight Shifted")
+            ax.set_title(
+                f"Pareto Comparison - "
+                f"{self.map_name.replace('_', ' ').title()} {self.env_dim}x{self.env_dim}"
+            )
+            ax.legend()
+            ax.grid(True)
+            plt.tight_layout()
+            out_path = f"{graphics_path}/{self.map_name}-{self.env_dim}.svg"
+            plt.savefig(out_path, bbox_inches="tight")
+            plt.close()
+        print(f"Saved: {out_path}")
+
+
+    @staticmethod
+    def run_all(analyzer: Analyzer, goals: dict) -> None:
+        """Runs A* for all map/dim combinations found in the analyzer and plots comparisons.
+
+        Args:
+            analyzer (Analyzer): Analyzer instance with loaded map_container
+            goals (dict): { (map_name, env_dim): (goal_row, goal_col) }
+        """
+        for (map_name, env_dim) in analyzer.map_container.keys():
+            start = (0, env_dim // 2)
+            goal  = goals.get((map_name, env_dim), (env_dim - 1, env_dim // 2))
+
+            print(f"\n{'='*60}")
+            print(f"  Running A* on {map_name.replace('_', ' ').title()} {env_dim}x{env_dim}")
+            print(f"  Start: {start}  |  Goal: {goal}")
+            print(f"{'='*60}")
+
+            astar = A_Star(
+                map_name=map_name,
+                env_dim=env_dim,
+                start=start,
+                goal=goal
+            )
+            astar.epsilon_constraint_search()
+            astar.plot_pareto_comparison(analyzer)

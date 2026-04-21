@@ -147,9 +147,6 @@ class Environment():
                 x, y = random.choice(candidates)
                 easy_map[x][y] = 0
 
-            #################################
-            # Generate Bubble in the Middle #
-            #################################
             meandering_river = np.zeros((env_dim, env_dim))
 
             # Parameters for the river path

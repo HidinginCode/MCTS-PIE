@@ -211,7 +211,14 @@ class Controller():
         return valid_pairs
 
     def is_valid_pair(self, pair: tuple) -> bool:
-        """Check if a movement and shifting direction pair is valid."""
+        """Check if a movement and shifting direction pair is valid.
+        
+        Args:
+            pair (tuple): Pair of shifting and movement directions.
+
+        Returns:
+            bool: Is pair valid or not.
+        """
         move_dir, shift_dir = pair
         dim = self._environment._env_dim
         x, y = self._current_pos

@@ -113,21 +113,19 @@ class MctsTree():
 
         return pareto_children[child_index]
 
-    def pareto_path_child_selection_aec(self, node: Node) -> Node:
-        """
-        Strong adaptive epsilon clustering child selection.
+    def pareto_path_child_selection_aega(self, node: Node) -> Node:
+        """Adaptive epsilon grid archiving based tree selection
 
-        Improvements over basic AEC:
-        - adaptive number of clusters based on visits
-        - normalized objective space
-        - quality-weighted sampling
-        - exploration bonus (UCB-style)
-        - safe fallbacks
+        Args:
+            node (Node): Node from which archive to select
+
+        Returns:
+            Node: Selected child
         """
 
         children = list(node._children.values())
         if not children:
-            raise RuntimeError("AEC selection called on node without children")
+            raise RuntimeError("AEGA selection called on node without children")
 
         # ---------- fallback if no pareto info ----------
         if not node._pareto_paths:
@@ -225,7 +223,7 @@ class MctsTree():
                     weights[i] = cds[i] / total
 
         else:
-            # We *do* have extremes: give them 50% of the mass, the rest to finite ones
+            # We *do* have extremes: give them 20% of the mass, the rest to finite ones
             extreme_mass = 0.2
             finite_mass = 0.8
 
@@ -236,12 +234,12 @@ class MctsTree():
                 for i in inf_indices:
                     weights[i] = 1.0
             else:
-                # Distribute 50% equally among extremes
+                # Distribute 20% equally among extremes
                 per_extreme = extreme_mass / len(inf_indices)
                 for i in inf_indices:
                     weights[i] = per_extreme
 
-                # Distribute the other 50% proportional to finite CDs
+                # Distribute the other 80% proportional to finite CDs
                 for i in finite_indices:
                     weights[i] += (cds[i] / finite_sum) * finite_mass
 
@@ -293,7 +291,7 @@ class MctsTree():
         parent_visits = max(1, node._visits)
         logN = np.log(parent_visits)
 
-        # multi-objective exploration weights (keep your original alphas)
+        # multi-objective exploration weights
         alpha = {
             "distance_to_goal": 0.3,
             "step_count": 1.0,
@@ -650,7 +648,12 @@ class MctsTree():
             
 
     def backpropagate(self, node: Node, current_root: Node) -> None:
-        """Backpropagate leaf metrics up the tree."""
+        """Backpropagation methd (also updated archives).
+
+        Args:
+            node (Node): New child node
+            current_root (Node): Current root node of the tree
+        """
 
         # Use stable, unmodified totals (not the running mean)
         leaf_values = node._real_values.copy()
@@ -705,7 +708,7 @@ class MctsTree():
             case 0: tree_sel_function = self.ucb_child_selection
             case 1: tree_sel_function = self.pareto_path_child_selection_hv
             case 2: tree_sel_function = self.pareto_path_child_selection_cd
-            case 3: tree_sel_function = self.pareto_path_child_selection_aec
+            case 3: tree_sel_function = self.pareto_path_child_selection_aega
             case _: raise ValueError("Did not supply a suitable tree selection indicator")
         
         match rollout_func:

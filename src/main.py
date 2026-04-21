@@ -158,9 +158,23 @@ if __name__ == "__main__":
     #     print(f"Visualized {file}")
 
     # analyzer = Analyzer()
-    # for dir in os.listdir("./log"):
-    #     analyzer.extract_pareto_front(f"./log/{dir}")
+    # analyzer.load_all("./log")
+    # analyzer.rank_configurations(top_n=10)
     # analyzer.plot_pareto_maps()
+
+    # analyzer = Analyzer()
+    # analyzer.load_all("./log")
+
+    # A_Star.run_all(analyzer, goals={
+    #     ("meandering_river_map", 50): (49, 25),
+    #     ("meandering_river_map", 35): (34, 17),
+    #     ("random_map", 50):           (49, 25),
+    #     ("random_map", 35):           (34, 17),
+    #     ("checkerboard_map", 50):     (49, 25),
+    #     ("checkerboard_map", 35):     (34, 17),
+    #     ("easy_map", 50):             (49, 25),
+    #     ("easy_map", 35):             (34, 17),
+    # })
 
     # for dir in os.listdir("./log"):
     #     for file in os.listdir(f"./log/{dir}"):
@@ -170,9 +184,13 @@ if __name__ == "__main__":
     #         if file.__contains__("ucb") and data==None:
     #             print("Ding")
 
-    Analyzer.interactive_manual_control(
-    map_type="checkerboard_map",   # or "easy_map", "checkerboard_map", "meandering_river_map"
-    env_dim=51,
-    start_pos=(0, 25),
-    goal=(50, 25),           # optional, defaults to (env_dim-1, env_dim-1)
-    )
+    # Analyzer.interactive_manual_control(
+    # map_type="checkerboard_map",   # or "easy_map", "checkerboard_map", "meandering_river_map"
+    # env_dim=51,
+    # start_pos=(0, 25),
+    # goal=(50, 25),           # optional, defaults to (env_dim-1, env_dim-1)
+    # )
+    analyzer = Analyzer()
+    analyzer.load_all("./log")
+    analyzer.test_configuration_significance()  # full matrix output
+    analyzer.summarize_significance_tiers()     # tier summary
