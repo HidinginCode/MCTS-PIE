@@ -1,3 +1,4 @@
+
 \subsection*{Experimental setup, common to E1, E2 and E4}
 
 All four experiment families share a uniform protocol -- 30 seeds, the same map suite, the same per-run Pareto archive logging, and the same indicator definitions. They are listed in this section in the order they were executed, but they apply the \textbf{same algorithm configuration}, namely the per-component winners reported in the E3 ablation (Section~\ref{sec:e3}): MO-MCTS-style hypervolume tree selection for plain \texttt{mcts} and \texttt{mo\_mcts}, distance-weight rollouts, progressive widening $(C, \alpha) = (1.5, 0.7)$, two-phase budget split $0.75$, local HV root selection, archive cap 20, and the oscillation guard enabled. E3 itself is reported afterwards as a stand-alone study explaining \emph{why} those choices are the defaults.
