@@ -17,19 +17,32 @@ import math
 class MctsTree():
     """This class contains the mcts tree."""
 
-    def __init__(self, root: Node, seed: int,  max_solutions: int = 10):
+    def __init__(self, root: Node, seed: int,  max_solutions: int = 10,
+                 progressive_widening_c: float = 1.5,
+                 progressive_widening_alpha: float = 0.7):
         """Init method for the MCTS tree.
 
         Args:
             root (Node): Root node for the tree
             seed (int): Seed (in this case only important to pass to logger)
             max_solutions (int): Maximum number of entries in pareto front
+            progressive_widening_c (float): Multiplicative coefficient for
+                progressive widening (``max_children = C * visits ** alpha``).
+            progressive_widening_alpha (float): Exponent for progressive widening.
         """
         self._identifier = id(self)
         self._root = root
         self._max_solutions = max_solutions
         self._max_depth = 0
         self._seed = seed
+        self._pw_c = progressive_widening_c
+        self._pw_alpha = progressive_widening_alpha
+        self._simulation_count = 0
+
+    @property
+    def simulation_count(self) -> int:
+        """Total simulation budget actually consumed across the search."""
+        return self._simulation_count
 
     @property
     def identifier(self) -> int:
@@ -49,8 +62,12 @@ class MctsTree():
         """
         return self._root
     
-    def _can_expand(self, node: Node, C: float = 1.5, alpha: float = 0.5) -> bool:
+    def _can_expand(self, node: Node, C: float | None = None, alpha: float | None = None) -> bool:
             """Progressive widening rule."""
+            if C is None:
+                C = self._pw_c
+            if alpha is None:
+                alpha = self._pw_alpha
             num_children = len(node._children)
             max_children = C * (node._visits ** alpha)
             return num_children < max_children
@@ -474,10 +491,8 @@ class MctsTree():
                     break
 
                 current_x, current_y = controller._current_pos
-                if not controller._goal_collected:
-                    goal_position = environment._goal
-                else:
-                    goal_position = environment._start_pos
+                remaining_cps = controller.remaining_checkpoints
+                goal_position = remaining_cps[0] if remaining_cps else environment._start_pos
 
                 # Sampling square bounds
                 min_x = max(0, current_x - sampling_radius)
@@ -539,20 +554,15 @@ class MctsTree():
             leaf_copy = leaf.clone()
             controller = leaf_copy._controller
             start = controller._start_pos
-            goal = controller._environment._goal
             env = controller._environment._environment
 
-            # Precompute constant
-            dxg = start[0] - goal[0]
-            dyg = start[1] - goal[1]
+            def current_target():
+                remaining = controller.remaining_checkpoints
+                return remaining[0] if remaining else start
 
             def distance(pos):
                 x, y = pos
-
-                if controller._goal_collected:
-                    gx, gy = start
-                else:
-                    gx, gy = goal
+                gx, gy = current_target()
 
                 dx = x - gx
                 dy = y - gy
@@ -571,10 +581,8 @@ class MctsTree():
                 distance_minimizing_moves = []
                 weight_for_distance_min_moves = []
                 valid_moves = leaf_copy._controller.get_all_valid_pairs()
-                if not controller._goal_collected:
-                    alligned_axis = current_pos[0] == goal[0] or current_pos[1] == goal[1]
-                else:
-                    alligned_axis = current_pos[0] == start[0] or current_pos[1] == start[1]
+                target = current_target()
+                alligned_axis = current_pos[0] == target[0] or current_pos[1] == target[1]
 
                 # Get moves that do not increase distance
                 slack = 1 # Allows for moves that are non optimal -> breaks problem that we have with straigt paths on alligned objectives
@@ -689,35 +697,33 @@ class MctsTree():
             current = current._parent
 
 
-    def search(self, total_budget: int, per_sim_budget: int, simulations_per_child: int, rollout_func: int = 0, root_selection: int = 0, tree_selection: int = 0) -> None:
+    def search(self, total_budget: int, per_sim_budget: int, simulations_per_child: int, rollout_func=0, root_selection=0, tree_selection=0) -> None:
         """Methods that builds the tree and looks for solutions
 
         Args:
             total_budget (int): Total number of simulations that can be used for expansion in the whole tree.
             per_sim_budget (int): Maximum number of simulation steps per simulation.
             simulations_per_child (int): Number of rollouts per child from which best one is chosen.
-            rollout_func (int): Indicator which rollout function to use.
-            root_selection (int): Indicator which root selection function to use.
-            tree_selection (int): Inidcator which tree selection function to use.
+            rollout_func: Integer ID or ``RolloutStrategy`` instance.
+            root_selection: Integer ID or ``RootSelectionStrategy`` instance.
+            tree_selection: Integer ID or ``TreeSelectionStrategy`` instance.
         """
-        match root_selection:
-            case 0: root_sel_function = self.hv_root_selection
-            case _: raise ValueError("Did not supply a suitable root selection indicator")
-        
-        match tree_selection:
-            case 0: tree_sel_function = self.ucb_child_selection
-            case 1: tree_sel_function = self.pareto_path_child_selection_hv
-            case 2: tree_sel_function = self.pareto_path_child_selection_cd
-            case 3: tree_sel_function = self.pareto_path_child_selection_aega
-            case _: raise ValueError("Did not supply a suitable tree selection indicator")
-        
-        match rollout_func:
-            case 0: rollout_function = self.light_rollout
-            case 1: rollout_function = self.iterative_heavy_square_sampling_rollout
-            case 2: rollout_function = self.iterative_heavy_distance_weight_rollout
-            case _: raise ValueError("Did not supply a suitable rollout function indicator")
+        # Import locally to avoid a circular import at module load time.
+        from strategies import (
+            build_tree_selection,
+            build_rollout,
+            build_root_selection,
+        )
 
-        log = Logger(self._root._controller._environment._map_type, self._root._controller._environment._env_dim, self._root._controller._start_pos, self._root._controller._environment._goal, total_budget, per_sim_budget, simulations_per_child, tree_sel_function.__name__, root_sel_function.__name__, self._max_solutions, rollout_function.__name__, self._seed, self._root)
+        root_sel_strategy = build_root_selection(root_selection).bind(self)
+        tree_sel_strategy = build_tree_selection(tree_selection).bind(self)
+        rollout_strategy = build_rollout(rollout_func).bind(self)
+
+        root_sel_function = root_sel_strategy
+        tree_sel_function = tree_sel_strategy
+        rollout_function = rollout_strategy
+
+        log = Logger(self._root._controller._environment._map_type, self._root._controller._environment._env_dim, self._root._controller._start_pos, self._root._controller._environment._goal, total_budget, per_sim_budget, simulations_per_child, tree_sel_strategy.name, root_sel_strategy.name, self._max_solutions, rollout_strategy.name, self._seed, self._root)
         print("Starting search ...")
         # Make list for found solutions
             # Set root to initial root
@@ -747,7 +753,10 @@ class MctsTree():
                 else:
                         used_simulation_counter += per_sim_budget
 
-            # Current root umsetzen
+            # Current root umsetzen — bail if expansion yielded no children
+            # (can happen with restricted action spaces / exhausted paths).
+            if not current_root._children:
+                break
             current_root = root_sel_function(current_root)
             #print(f"New root at depth: {current_root._depth}")
             Node.prune_siblings(current_root) # Remove siblings to prune tree
@@ -756,4 +765,5 @@ class MctsTree():
 
             if current_root.is_terminal_state():
                 solutions.append(current_root)
+            self._simulation_count += used_simulation_counter
         log.log_solutions(solutions)

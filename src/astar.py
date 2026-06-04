@@ -4,6 +4,7 @@ import os
 from controller import Controller
 from environment import Environment
 from analyzer import Analyzer
+from heuristics import manhattan_chain
 import random
 import matplotlib.pyplot as plt
 import numpy as np
@@ -19,25 +20,30 @@ PARETO_RCPARAMS = {
 
 class A_Star:
 
-    def __init__(self, map_name: str, env_dim: int, start: tuple, goal: tuple):
+    def __init__(self, map_name: str, env_dim: int, start: tuple, goal: tuple, checkpoints: list = None):
         """Init method for the a star class.
 
         Args:
             map_name (str): Name of the map as a string
             env_dim (int): Dimension of the map
-            start (tuple): Start coordinate 
-            goal (tuple): Goal Coordinate
+            start (tuple): Start coordinate
+            goal (tuple): Goal Coordinate (single-checkpoint backward compat)
+            checkpoints (list, optional): Ordered list of checkpoints the agent
+                must visit before returning to ``start``. When ``None`` defaults
+                to ``[goal]`` (single-goal case).
         """
         self.map_name = map_name
         self.env_dim = env_dim
         self.start = start
         self.goal = goal
+        self.checkpoints = [tuple(goal)] if checkpoints is None else [tuple(cp) for cp in checkpoints]
 
         self.env = Environment(
             map_type=self.map_name,
             env_dim=self.env_dim,
             start_pos=self.start,
-            goal=self.goal
+            goal=self.goal,
+            checkpoints=self.checkpoints,
         )
         self.pareto_values = []
         self.grid = self.env.environment
@@ -48,18 +54,18 @@ class A_Star:
     # ------------------------------------------------------------
 
     class Node:
-        def __init__(self, pos: tuple, goal_collected: bool, steps: int, weight_sum: float, parent: Node = None):
+        def __init__(self, pos: tuple, checkpoint_idx: int, steps: int, weight_sum: float, parent: "A_Star.Node" = None):
             """Init method for the node class used in A-Star.
 
             Args:
                 pos (tuple): Position of the agent
-                goal_collected (bool): Waypoint collection flag
+                checkpoint_idx (int): Index of the next checkpoint to collect
                 steps (int): Steps taken
                 weight_sum (float): Weight shifted
                 parent (Node, optional): Parent node. Defaults to None.
             """
             self.pos = pos
-            self.goal_collected = goal_collected
+            self.checkpoint_idx = checkpoint_idx
             self.steps = steps
             self.weight_sum = weight_sum
             self.parent = parent
@@ -85,44 +91,45 @@ class A_Star:
 
         open_list = []
         counter = 0
+        n_checkpoints = len(self.checkpoints)
 
-        heapq.heappush(open_list, (0, counter, self.start, False, 0))
+        heapq.heappush(open_list, (0, counter, self.start, 0, 0))
 
         closed = {}
 
         while open_list:
 
-            _, _, pos, goal_collected, steps = heapq.heappop(open_list)
+            _, _, pos, checkpoint_idx, steps = heapq.heappop(open_list)
 
-            state = (pos, goal_collected)
+            state = (pos, checkpoint_idx)
 
             if state in closed and closed[state] <= steps:
                 continue
 
             closed[state] = steps
 
-            if goal_collected and pos == self.start:
+            if checkpoint_idx == n_checkpoints and pos == self.start:
                 return steps
 
             for next_pos in self.valid_moves(pos):
 
-                next_goal_collected = goal_collected
-                if next_pos == self.goal:
-                    next_goal_collected = True
+                next_checkpoint_idx = checkpoint_idx
+                if next_checkpoint_idx < n_checkpoints and next_pos == self.checkpoints[next_checkpoint_idx]:
+                    next_checkpoint_idx += 1
 
                 next_steps = steps + 1
 
-                if not next_goal_collected:
-                    h = self.manhattan(next_pos, self.goal) + \
-                        self.manhattan(self.goal, self.start)
-                else:
-                    h = self.manhattan(next_pos, self.start)
+                h = manhattan_chain(
+                    next_pos,
+                    self.checkpoints[next_checkpoint_idx:],
+                    self.start,
+                )
 
                 counter += 1
                 heapq.heappush(
                     open_list,
                     (next_steps + h, counter,
-                     next_pos, next_goal_collected, next_steps)
+                     next_pos, next_checkpoint_idx, next_steps)
                 )
 
         return None
@@ -136,8 +143,9 @@ class A_Star:
 
         open_list = []
         counter = 0
+        n_checkpoints = len(self.checkpoints)
 
-        start_node = self.Node(self.start, False, 0, 0, None)
+        start_node = self.Node(self.start, 0, 0, 0, None)
 
         heapq.heappush(open_list, (0, counter, start_node))
 
@@ -152,30 +160,30 @@ class A_Star:
 
             remaining = step_limit - current.steps
 
-            if not current.goal_collected:
-                min_needed = self.manhattan(current.pos, self.goal) + \
-                            self.manhattan(self.goal, self.start)
-            else:
-                min_needed = self.manhattan(current.pos, self.start)
+            min_needed = manhattan_chain(
+                current.pos,
+                self.checkpoints[current.checkpoint_idx:],
+                self.start,
+            )
 
             if min_needed > remaining:
                 continue
 
-            state = (current.pos, current.goal_collected, current.steps)
+            state = (current.pos, current.checkpoint_idx, current.steps)
 
             if state in closed and closed[state] <= current.weight_sum:
                 continue
 
             closed[state] = current.weight_sum
 
-            if current.goal_collected and current.pos == self.start:
+            if current.checkpoint_idx == n_checkpoints and current.pos == self.start:
                 return current
 
             for next_pos in self.valid_moves(current.pos):
 
-                next_goal_collected = current.goal_collected
-                if next_pos == self.goal:
-                    next_goal_collected = True
+                next_checkpoint_idx = current.checkpoint_idx
+                if next_checkpoint_idx < n_checkpoints and next_pos == self.checkpoints[next_checkpoint_idx]:
+                    next_checkpoint_idx += 1
 
                 next_steps = current.steps + 1
                 cell_weight = self.grid[next_pos[0]][next_pos[1]]
@@ -183,7 +191,7 @@ class A_Star:
 
                 next_node = self.Node(
                     next_pos,
-                    next_goal_collected,
+                    next_checkpoint_idx,
                     next_steps,
                     next_weight,
                     current

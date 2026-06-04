@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 from environment import Environment
+from heuristics import manhattan_chain
 
 class Controller():
     """Controller class which facilitates map changes and agent movement."""
@@ -26,7 +27,8 @@ class Controller():
         self._current_pos = tuple(start_pos)
         self._step_count = 0
         self._weight_shifted = 0.0
-        self._goal_collected = False
+        # Number of checkpoints already visited (in order).
+        self._checkpoint_idx = 0
         self._distance_to_goal = self.calculate_distance_to_goal()
 
     def clone(self) -> Controller:
@@ -41,8 +43,22 @@ class Controller():
         clone_controller._step_count = int(self._step_count)
         clone_controller._weight_shifted = float(self._weight_shifted)
         clone_controller._distance_to_goal = float(self._distance_to_goal)
-        clone_controller._goal_collected = bool(self._goal_collected)
+        clone_controller._checkpoint_idx = int(self._checkpoint_idx)
         return clone_controller
+
+    @property
+    def _goal_collected(self) -> bool:
+        """Backward-compatible flag: True once all checkpoints have been visited.
+
+        Equivalent to the pre-refactor boolean (single-checkpoint case). Kept as
+        a property so existing rollouts and selection code continue to work.
+        """
+        return self._checkpoint_idx >= len(self._environment._checkpoints)
+
+    @property
+    def remaining_checkpoints(self) -> list:
+        """Checkpoints still to be visited, in order."""
+        return list(self._environment._checkpoints[self._checkpoint_idx:])
 
     @property
     def identifier(self) -> int:
@@ -164,8 +180,10 @@ class Controller():
         # Move agent to new position, increase steps and calculate new distance to goal
         self._current_pos = new_pos
         self._step_count = self._step_count+1
-        if self._current_pos == self._environment._goal:
-            self._goal_collected = True
+        # Advance the checkpoint index when the next expected waypoint is hit.
+        checkpoints = self._environment._checkpoints
+        if self._checkpoint_idx < len(checkpoints) and self._current_pos == checkpoints[self._checkpoint_idx]:
+            self._checkpoint_idx += 1
         self._distance_to_goal = self.calculate_distance_to_goal()
 
         # Shift weight, increase weight shifted, remove weight from old position
@@ -253,28 +271,14 @@ class Controller():
         return 0 <= x < dim and 0 <= y < dim
 
     def calculate_distance_to_goal(self) -> float:
-        """Calculates the Manhattan distance to the goal from the current position.
+        """Manhattan-chain lower bound: current -> remaining checkpoints -> start.
 
-        Returns:
-            float: Manhattan distance to goal
+        For the legacy single-checkpoint case this reduces to the original
+        formula (dist(current, goal) + dist(goal, start) while goal uncollected,
+        else dist(current, start)).
         """
-        x, y = self._current_pos
-        gx, gy = self._environment._goal
-        sx, sy = self._start_pos
-
-        if not self._goal_collected:
-            # dist(current -> goal)
-            dx1 = x - gx
-            dy1 = y - gy
-            dist_to_goal = (dx1 if dx1 >= 0 else -dx1) + (dy1 if dy1 >= 0 else -dy1)
-
-            # dist(goal -> start) - constant
-            dx2 = gx - sx
-            dy2 = gy - sy
-            return dist_to_goal + (dx2 if dx2 >= 0 else -dx2) + (dy2 if dy2 >= 0 else -dy2)
-
-        else:
-            # dist(current -> start)
-            dx = x - sx
-            dy = y - sy
-            return (dx if dx >= 0 else -dx) + (dy if dy >= 0 else -dy)
+        return float(manhattan_chain(
+            self._current_pos,
+            self._environment._checkpoints[self._checkpoint_idx:],
+            self._start_pos,
+        ))

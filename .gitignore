@@ -214,3 +214,5 @@ log.tar.gz
 maps/
 a_star_log/
 graphics/
+/.claude
+/paper

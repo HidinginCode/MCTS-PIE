@@ -85,6 +85,65 @@ def simulations(map: str,
 
     tree.search(total_budget=budget, per_sim_budget=per_sim_budget, simulations_per_child=number_of_sims, rollout_func = rollout_method, root_selection = root_selection_method, tree_selection = tree_selection_method)
 
+def momcts_simulations(map: str, env_dim, start: tuple, goal: tuple,
+                       budget: int, per_sim_budget: int, number_of_sims: int,
+                       rollout_method: int = 0, tree_selection_method: int = 0,
+                       root_selection_method: int = 0,
+                       checkpoints: list = None, seed: int = 420,
+                       max_pareto_path_archive: int = 20) -> list:
+    """Run the multi-objective MCTS variant (global Pareto archive).
+
+    Returns the global archive objective vectors after the search.
+    """
+    from mo_mc_tree import MOMctsTree
+
+    env = Environment(env_dim=env_dim, goal=goal, map_type=map, start_pos=start,
+                      checkpoints=checkpoints)
+    controller = Controller(env, start_pos=start)
+    root = Node(controller=controller)
+    tree = MOMctsTree(root=root, seed=seed, max_solutions=max_pareto_path_archive)
+    tree.search(total_budget=budget, per_sim_budget=per_sim_budget,
+                simulations_per_child=number_of_sims,
+                rollout_func=rollout_method,
+                root_selection=root_selection_method,
+                tree_selection=tree_selection_method)
+    return tree.global_pareto_values()
+
+
+def two_phase_simulations(map: str, env_dim, start: tuple, goal: tuple,
+                          phase1_budget: int, phase2_budget_per_path: int,
+                          per_sim_budget: int, number_of_sims: int,
+                          multi_objective: bool = False,
+                          checkpoints: list = None, seed: int = 420,
+                          max_pareto_path_archive: int = 20) -> list:
+    """Run the two-phase MCTS (path first, weights second)."""
+    from two_phase_mcts import TwoPhaseSearch
+
+    env = Environment(env_dim=env_dim, goal=goal, map_type=map, start_pos=start,
+                      checkpoints=checkpoints)
+    orchestrator = TwoPhaseSearch(env, start_pos=start, seed=seed,
+                                  multi_objective=multi_objective,
+                                  max_pareto_path_archive=max_pareto_path_archive)
+    return orchestrator.run(phase1_budget, phase2_budget_per_path,
+                            per_sim_budget, number_of_sims)
+
+
+def astar_mcts_hybrid_simulations(map: str, env_dim, start: tuple, goal: tuple,
+                                  phase2_budget_per_path: int,
+                                  per_sim_budget: int, number_of_sims: int,
+                                  multi_objective: bool = False,
+                                  checkpoints: list = None, seed: int = 420,
+                                  max_pareto_path_archive: int = 20) -> list:
+    """Run A* pathfinding + MCTS weight-pushing hybrid."""
+    from astar_mcts_hybrid import AStarMctsHybrid
+
+    hybrid = AStarMctsHybrid(map, env_dim, start, goal,
+                             checkpoints=checkpoints, seed=seed,
+                             multi_objective=multi_objective,
+                             max_pareto_path_archive=max_pareto_path_archive)
+    return hybrid.run(phase2_budget_per_path, per_sim_budget, number_of_sims)
+
+
 def moa_wrapper(arguments: list):
     """Wrapper for multi-processing analysis of moa-star paths.
 

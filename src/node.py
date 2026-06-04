@@ -6,6 +6,9 @@ import random
 class Node():
     """This node class is the basis for later building the MCTS tree."""
 
+    # Class-level toggle so ablation drivers can disable the oscillation guard.
+    OSCILLATION_GUARD: bool = True
+
     def __init__(self, controller: Controller, parent: Node | None = None, last_move: tuple = None):
         """Init method for the node class that accepts a controller and a parent node.
 
@@ -169,7 +172,11 @@ class Node():
         Returns:
             bool: Is terminal
         """
-        return self._controller._distance_to_goal == 0
+        if self._controller._distance_to_goal == 0:
+            return True
+        # No further actions available -> dead-end terminal (e.g. FixedPathController
+        # whose pre-computed path has been fully consumed).
+        return not self._controller.get_all_valid_pairs()
     
     def expand(self) -> Node:
         """Method that adds a new child to the current node if there are untried actions.
@@ -182,7 +189,11 @@ class Node():
         untried_actions = self.get_untried_actions()
         current_pos = self._controller._current_pos
 
-        if self._parent is not None and current_pos != self._controller._environment._goal:
+        # Oscillation guard: disallow reversing the last move, except at a
+        # checkpoint where the agent is expected to turn around.
+        at_checkpoint = current_pos in self._controller._environment._checkpoints
+        if (Node.OSCILLATION_GUARD and self._parent is not None
+                and not at_checkpoint):
             last_pos = self._parent._controller._current_pos
             bad_move = (last_pos[0] - current_pos[0], last_pos[1]-current_pos[1])
         else:
