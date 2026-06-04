@@ -1,0 +1,127 @@
+\subsection{Problem definition: Pathfinding in Interactive Environments}
+\label{sec:problem}
+
+A PIE instance is a tuple $\langle \mathcal{G}, w, s_0, \mathbf{c}\rangle$ where $\mathcal{G}$ is a 4-connected grid of dimension $d \times d$, $w : \mathcal{G} \to \mathbb{R}_{\geq 0}$ assigns a non-negative weight to each cell, $s_0 \in \mathcal{G}$ is the start cell, and $\mathbf{c} = (c_1, \dots, c_K)$ is an ordered list of checkpoints culminating in the goal cell.
+
+At every decision step, the agent picks a pair $(m, h)$ where $m \in \{N, S, E, W\}$ is a movement direction and $h \in \{N, S, E, W\}$ is a \emph{shift direction}. Executing $(m, h)$ first moves the agent by $m$ if the move is in-bounds, then transfers all weight $w(p)$ of the agent's previous cell $p$ onto a neighbor cell $p + h$. The shift therefore clears a corridor at the cost of accumulating weight elsewhere, and the modified map persists for the remainder of the episode. An episode terminates once the agent has visited every checkpoint in order.
+
+Let $\pi = (a_0, a_1, \dots, a_{T-1})$ be a finite trajectory. We measure three objectives, all minimized:
+\begin{itemize}
+    \item $f_1(\pi) = T$ -- the number of steps,
+    \item $f_2(\pi) = \sum_{t=0}^{T-1} w(p_t)$ -- the total weight shifted,
+    \item $f_3(\pi) = \mathrm{dist}(s_T, c_K)$ -- the residual Manhattan distance to the final checkpoint, used to penalize unsolved trajectories during search.
+\end{itemize}
+A solution is \emph{solved} iff $f_3 = 0$. A trajectory $\pi$ \emph{Pareto-dominates} $\pi'$ when $f_i(\pi) \leq f_i(\pi')$ for all $i$ and at least one inequality is strict. The goal of a PIE solver is to return an approximation of the Pareto front of solved trajectories.
+
+\subsection{MCTS for PIE (single-objective)}
+The canonical baseline (Algorithm~\ref{alg:mcts}) instantiates MCTS with progressive widening on the joint $(m,h)$ action space. The node statistic is a scalar score derived from the three objectives via a hypervolume-style aggregation, and selection uses UCB. A global archive collects terminal nodes' objective vectors; at the end of search the non-dominated subset is returned.
+
+\begin{algorithm}[t]
+\SetAlgoLined
+\KwIn{root state $s_0$, total budget $B$, progressive-widening parameters $C, \alpha$}
+\KwOut{Pareto-non-dominated subset of terminal nodes}
+$\mathcal{T} \leftarrow$ tree with root $s_0$\;
+\While{simulation count $< B$}{
+  $v \leftarrow$ root\;
+  \While{$v$ is not terminal \textbf{and} fully expanded under PW}{
+    $v \leftarrow \arg\max_{v' \in \text{children}(v)} \mathrm{UCB}(v')$\;
+  }
+  \If{$|{\rm children}(v)| < C \cdot N(v)^{\alpha}$}{
+    $v \leftarrow$ Expand($v$) with a new $(m,h)$ child\;
+  }
+  $\mathbf{f} \leftarrow$ Rollout($v$)\;
+  Backpropagate $\mathbf{f}$ along the path to root\;
+  Append $\mathbf{f}$ to the terminal archive\;
+}
+\Return non-dominated subset of the terminal archive\;
+\caption{MCTS for PIE}
+\label{alg:mcts}
+\end{algorithm}
+
+\subsection{Multi-Objective MCTS (MO-MCTS)}
+\label{sec:mo_mcts}
+MO-MCTS (Algorithm~\ref{alg:momcts}) replaces the scalar Q-value at every node with a \emph{Pareto archive} of objective vectors observed in its subtree. Tree selection uses a hypervolume-contribution criterion: among the children, the one whose front dominates the largest exclusive hypervolume w.r.t.\ a fixed reference point is preferred, with UCB exploration on visit counts. A global archive at the root accumulates non-dominated solutions across all simulations.
+
+\begin{algorithm}[t]
+\SetAlgoLined
+\KwIn{root $s_0$, budget $B$, archive cap $K$}
+\KwOut{global Pareto archive of size $\leq K$}
+Initialize tree $\mathcal{T}$ and global archive $\mathcal{A} \leftarrow \emptyset$\;
+\While{simulation count $< B$}{
+  $v \leftarrow$ HV-Select-Path($\mathcal{T}$)\;
+  $v \leftarrow$ Expand($v$) if PW allows\;
+  $\mathbf{f} \leftarrow$ Rollout($v$)\;
+  Update node-local Pareto fronts along path-to-root\;
+  $\mathcal{A} \leftarrow$ NonDominatedMerge$(\mathcal{A} \cup \{\mathbf{f}\})$, truncated to $K$\;
+}
+\Return $\mathcal{A}$\;
+\caption{Multi-Objective MCTS}
+\label{alg:momcts}
+\end{algorithm}
+
+\subsection{Two-Phase MCTS}
+\label{sec:two_phase}
+Two-phase search (Algorithm~\ref{alg:tp}) decomposes the joint action space. Phase~1 uses a path-only controller, in which the shift component is forced to a no-op direction so that the search effectively explores movement only and yields a Pareto set of near-shortest paths. Phase~2 runs an MCTS over the shift-only action space along each fixed path, freely choosing where to dump weight.
+
+We instantiate two variants:
+\begin{itemize}
+    \item \textbf{two\_phase\_mcts}: phase~1 uses a single-objective MCTS with UCB selection;
+    \item \textbf{two\_phase\_momcts}: phase~1 uses an MO-MCTS with hypervolume-based selection so that path diversity in step count is explicitly maintained.
+\end{itemize}
+Phase~2 is identical in both variants and uses MO-MCTS to keep a global archive of weight-shift outcomes.
+
+\begin{algorithm}[t]
+\SetAlgoLined
+\KwIn{instance, phase~1 budget $B_1$, phase~2 per-path budget $B_2$}
+\KwOut{merged global Pareto front}
+\textbf{Phase 1:} run MCTS / MO-MCTS with a path-only controller using budget $B_1$\;
+$\mathcal{P} \leftarrow$ unique movement-only paths to terminal nodes\;
+$\mathcal{A} \leftarrow \emptyset$\;
+\ForEach{path $\pi \in \mathcal{P}$}{
+  \textbf{Phase 2:} run MO-MCTS with controller fixed to $\pi$ and free shift direction, budget $B_2$\;
+  $\mathcal{A} \leftarrow \mathcal{A} \cup \mathrm{archive}(\pi)$\;
+}
+\Return non-dominated subset of $\mathcal{A}$\;
+\caption{Two-Phase (MO-)MCTS}
+\label{alg:tp}
+\end{algorithm}
+
+\subsection{$\varepsilon$-constraint A*}
+\label{sec:astar}
+The classical baseline (Algorithm~\ref{alg:astar}) computes the shortest step count $L^{\star}$ ignoring weights. It then performs an outer sweep over a step budget $L^{\star} + \varepsilon$ for $\varepsilon \in \{0, 1, \dots, 3d\}$, each time running a constrained A* that minimizes accumulated weight subject to the step bound. Each unique outcome is added to the returned front.
+
+\begin{algorithm}[t]
+\SetAlgoLined
+\KwIn{instance with grid dimension $d$}
+\KwOut{Pareto front over (steps, weight)}
+$L^{\star} \leftarrow$ shortest step count via A*\;
+$\mathcal{F} \leftarrow \emptyset$\;
+\For{$\varepsilon = 0$ \KwTo $3d$}{
+  $\pi \leftarrow$ A* minimizing accumulated weight with step bound $L^{\star} + \varepsilon$\;
+  \If{$\pi$ exists \textbf{and} (steps, weight) is new}{
+    $\mathcal{F} \leftarrow \mathcal{F} \cup \{(steps_\pi, weight_\pi, 0)\}$\;
+  }
+}
+\Return $\mathcal{F}$\;
+\caption{$\varepsilon$-constraint A* baseline}
+\label{alg:astar}
+\end{algorithm}
+
+\subsection{A*+MCTS Hybrid}
+\label{sec:hybrid}
+The hybrid (Algorithm~\ref{alg:hybrid}) replaces phase~1 of two-phase MCTS with the $\varepsilon$-constraint A* paths. Each of the resulting near-shortest skeleton paths is then refined by an MO-MCTS over the shift action space, identical to phase~2 of the two-phase variant. The intuition is that A* finds movement-optimal paths exactly and far cheaper than MCTS can; MCTS is then deployed only where the multi-objective reasoning matters, namely the shift dimension.
+
+\begin{algorithm}[t]
+\SetAlgoLined
+\KwIn{instance, phase~2 per-path budget $B_2$}
+\KwOut{merged global Pareto front}
+$\mathcal{P} \leftarrow$ paths returned by $\varepsilon$-constraint A* (Algorithm~\ref{alg:astar})\;
+$\mathcal{A} \leftarrow \emptyset$\;
+\ForEach{path $\pi \in \mathcal{P}$}{
+  Run MO-MCTS with controller fixed to $\pi$ and free shift direction, budget $B_2$\;
+  $\mathcal{A} \leftarrow \mathcal{A} \cup \mathrm{archive}(\pi)$\;
+}
+\Return non-dominated subset of $\mathcal{A}$\;
+\caption{A*+MCTS Hybrid}
+\label{alg:hybrid}
+\end{algorithm}

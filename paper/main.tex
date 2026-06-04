@@ -1,0 +1,101 @@
+\documentclass[lettersize,journal]{IEEEtran}
+
+% Use bibunits for split bibliographies
+\usepackage{bibunits}
+\defaultbibliographystyle{IEEEtran}
+\defaultbibliography{references}
+
+% Your usual packages
+% \usepackage{cite}  % removed for bibunits
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{algorithmic}
+\usepackage{graphicx}
+\usepackage{textcomp}
+\usepackage{xcolor}
+\usepackage{subcaption}
+\usepackage{float}
+\usepackage{url}
+\usepackage{bm}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{svg}  % compile with --shell-escape if used
+\usepackage{microtype}
+\usepackage{amsthm}
+\usepackage{mathtools}
+\usepackage{tikz}
+\usepackage{pgfplots}
+\usepackage{pgfplotstable}
+\usepgfplotslibrary{groupplots}
+\usepackage[ruled,vlined,linesnumbered]{algorithm2e}
+%\usepackage{todonotes}
+\usepackage{microtype}
+
+\usepackage{pdflscape}
+\usepackage{array}
+\usepackage{multirow}
+\usepackage{longtable}
+
+\theoremstyle{definition}
+\newtheorem{definition}{Definition}[section]
+
+% Remove or redefine qenv if unused
+%\newcommand{\makeq}[1]{\begin{qenv}{#1}\end{qenv}\medskip}
+
+\def\BibTeX{{\rm B\kern-.05em{\sc i\kern-.025em b}\kern-.08em
+    T\kern-.1667em\lower.7ex\hbox{E}\kern-.125emX}}
+    
+\begin{document}
+
+\title{MCTS-PIE: Multi-Objective Monte Carlo Tree Search for\\ Pathfinding with Interactive Environments}
+
+
+\author{
+  \IEEEauthorblockN{Alexander Dockhorn - }
+  \IEEEauthorblockA{\textit{University of Southern Denmark - } \texttt{adoc@mmmi.sdu.dk}}\\
+}
+
+\maketitle
+
+% === MAIN PAPER (bibunit #1) ===
+%\begin{bibunit}
+
+\begin{abstract}
+  \input{sections/abstract}
+\end{abstract}
+
+\begin{IEEEkeywords}
+  Monte Carlo Tree Search, Multi-Objective Optimization, Pathfinding, A* Search, Pareto Front, Hypervolume.
+\end{IEEEkeywords}
+
+\section{Introduction}
+\label{sec:intro}
+\input{sections/intro.tex}
+
+\section{Related work}
+\label{sec:related_work}
+\input{sections/related_work}
+
+\section{Method}
+\label{sec:method}
+\input{sections/method}
+
+\section{Experiments}
+\label{sec:exp}
+\input{sections/experiments}
+
+\section{Conclusion and Future Work}
+\label{sec:future_work}
+\input{sections/futurework}
+
+\nocite{mysurvey}
+\nocite{sanner2011ippc}
+\nocite{battlesnake}
+\nocite{abs-2009-05643,DockhornGJL20}
+
+\bibliographystyle{plain}
+\bibliography{references}
+
+\clearpage
+\onecolumn
+
+\end{document}
