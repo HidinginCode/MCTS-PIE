@@ -1,0 +1,16 @@
+a,b,a12,magnitude
+astar,mcts,0.6331666666666667,small
+astar,mo_mcts,0.6281666666666667,small
+astar,two_phase_mcts,0.9226666666666667,large
+astar,two_phase_momcts,0.5531666666666666,negligible
+astar,astar_mcts,0.45,negligible
+mcts,mo_mcts,0.49251666666666666,negligible
+mcts,two_phase_mcts,0.85,large
+mcts,two_phase_momcts,0.4124111111111112,small
+mcts,astar_mcts,0.3469,medium
+mo_mcts,two_phase_mcts,0.8559777777777778,large
+mo_mcts,two_phase_momcts,0.41693333333333327,small
+mo_mcts,astar_mcts,0.3527999999999999,medium
+two_phase_mcts,two_phase_momcts,0.10816666666666663,large
+two_phase_mcts,astar_mcts,0.06923333333333337,large
+two_phase_momcts,astar_mcts,0.4129444444444444,small

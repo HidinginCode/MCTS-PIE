@@ -1,0 +1,16 @@
+a,b,statistic,p_raw,p_holm
+two_phase_mcts/frac0.25,two_phase_mcts/frac0.5,572.0,2.602758952442907e-48,1.0411035809771628e-47
+two_phase_mcts/frac0.25,two_phase_mcts/frac0.75,15.0,7.070630025820622e-51,9.125339774537157e-50
+two_phase_mcts/frac0.25,two_phase_momcts/frac0.25,3708.0,0.5717527057836451,0.5717527057836451
+two_phase_mcts/frac0.25,two_phase_momcts/frac0.5,0.0,6.083559849691438e-51,9.125339774537157e-50
+two_phase_mcts/frac0.25,two_phase_momcts/frac0.75,0.0,6.083559849691438e-51,9.125339774537157e-50
+two_phase_mcts/frac0.5,two_phase_mcts/frac0.75,2215.0,9.142228867263304e-42,2.742668660178991e-41
+two_phase_mcts/frac0.5,two_phase_momcts/frac0.25,518.0,1.5316885024308525e-48,7.658442512154262e-48
+two_phase_mcts/frac0.5,two_phase_momcts/frac0.5,8.0,6.591586886147657e-51,9.125339774537157e-50
+two_phase_mcts/frac0.5,two_phase_momcts/frac0.75,1.0,6.144866877758197e-51,9.125339774537157e-50
+two_phase_mcts/frac0.75,two_phase_momcts/frac0.25,15.0,7.070630025820622e-51,9.125339774537157e-50
+two_phase_mcts/frac0.75,two_phase_momcts/frac0.5,390.0,2.9375378989754782e-49,1.762522739385287e-48
+two_phase_mcts/frac0.75,two_phase_momcts/frac0.75,9.0,6.657990099687151e-51,9.125339774537157e-50
+two_phase_momcts/frac0.25,two_phase_momcts/frac0.5,0.0,6.083559849691438e-51,9.125339774537157e-50
+two_phase_momcts/frac0.25,two_phase_momcts/frac0.75,0.0,6.083559849691438e-51,9.125339774537157e-50
+two_phase_momcts/frac0.5,two_phase_momcts/frac0.75,2299.0,1.9526159049087697e-41,3.9052318098175393e-41
